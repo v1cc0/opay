@@ -171,6 +171,42 @@ def main() -> int:
         f"user balance mismatch: expected {expected_balance}, got {final_balance}",
     )
 
+    detail_url = (
+        f"{args.api_base}/api/admin/orders/{urllib.parse.quote(order_id)}"
+        f"?token={urllib.parse.quote(args.admin_token)}"
+    )
+    status_code, detail_before_replay = request_json("GET", detail_url)
+    expect(status_code == 200, f"failed to fetch EasyPay admin detail before replay: {status_code} {detail_before_replay}")
+    actions_before = [item["action"] for item in detail_before_replay.get("auditLogs", [])]
+    order_paid_count_before = actions_before.count("ORDER_PAID")
+    recharge_success_count_before = actions_before.count("RECHARGE_SUCCESS")
+
+    replay_status, replay_body = request_text(notify_url)
+    expect(
+        replay_status == 200 and replay_body.strip() == "success",
+        f"replayed EasyPay notify failed: {replay_status} {replay_body}",
+    )
+
+    status_code, my_orders_after_replay = request_json("GET", my_orders_url)
+    expect(status_code == 200, f"failed to load my orders after replay: {status_code} {my_orders_after_replay}")
+    replay_balance = float(my_orders_after_replay["user"]["balance"])
+    expect(
+        abs(replay_balance - final_balance) < 1e-6,
+        f"replayed EasyPay notify changed balance: expected {final_balance}, got {replay_balance}",
+    )
+
+    status_code, detail_after_replay = request_json("GET", detail_url)
+    expect(status_code == 200, f"failed to fetch EasyPay admin detail after replay: {status_code} {detail_after_replay}")
+    actions_after = [item["action"] for item in detail_after_replay.get("auditLogs", [])]
+    expect(
+        actions_after.count("ORDER_PAID") == order_paid_count_before,
+        "replayed EasyPay notify duplicated ORDER_PAID audit log",
+    )
+    expect(
+        actions_after.count("RECHARGE_SUCCESS") == recharge_success_count_before,
+        "replayed EasyPay notify duplicated RECHARGE_SUCCESS audit log",
+    )
+
     result = {
         "instanceId": instance_id,
         "orderId": order_id,
@@ -182,6 +218,12 @@ def main() -> int:
         "status": final_status,
         "userOrder": latest_order,
         "createPayload": create_payload,
+        "replay": {
+            "response": replay_body.strip(),
+            "balanceAfterReplay": replay_balance,
+            "orderPaidCount": actions_after.count("ORDER_PAID"),
+            "rechargeSuccessCount": actions_after.count("RECHARGE_SUCCESS"),
+        },
     }
     output = json.dumps(result, indent=2)
     with open(args.result_file, "w") as fh:

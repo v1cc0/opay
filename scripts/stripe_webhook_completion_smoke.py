@@ -77,6 +77,7 @@ def build_webhook_payload(order_id: str, payment_intent_id: str, amount_cents: i
 def main() -> int:
     parser = argparse.ArgumentParser(description="Stripe webhook completion smoke")
     parser.add_argument("--api-base", default="http://127.0.0.1:8080")
+    parser.add_argument("--admin-token", default="opay-admin-smoke-token")
     parser.add_argument("--user-token", default="user-token")
     parser.add_argument("--payment-type", default="stripe")
     parser.add_argument("--amount", type=float, default=20.0)
@@ -154,6 +155,49 @@ def main() -> int:
         f"user balance mismatch: expected {expected_balance}, got {final_balance}",
     )
 
+    detail_url = (
+        f"{args.api_base}/api/admin/orders/{urllib.parse.quote(order_id)}"
+        f"?token={urllib.parse.quote(args.admin_token)}"
+    )
+    status_code, detail_before_replay = request_json("GET", detail_url)
+    expect(status_code == 200, f"failed to fetch admin detail before replay: {status_code} {detail_before_replay}")
+    actions_before = [item["action"] for item in detail_before_replay.get("auditLogs", [])]
+    order_paid_count_before = actions_before.count("ORDER_PAID")
+    recharge_success_count_before = actions_before.count("RECHARGE_SUCCESS")
+
+    replay_timestamp = int(time.time())
+    replay_signature = sign_stripe_payload(args.webhook_secret, webhook_payload, replay_timestamp)
+    replay_status_code, replay_response = request_json(
+        "POST",
+        f"{args.api_base}/api/stripe/webhook",
+        json.loads(webhook_payload),
+        headers={"Stripe-Signature": replay_signature},
+    )
+    expect(
+        replay_status_code == 200,
+        f"replayed stripe webhook failed: {replay_status_code} {replay_response}",
+    )
+
+    status_code, my_orders_after_replay = request_json("GET", my_orders_url)
+    expect(status_code == 200, f"failed to load my orders after replay: {status_code} {my_orders_after_replay}")
+    replay_balance = float(my_orders_after_replay["user"]["balance"])
+    expect(
+        abs(replay_balance - final_balance) < 1e-6,
+        f"replayed stripe webhook changed balance: expected {final_balance}, got {replay_balance}",
+    )
+
+    status_code, detail_after_replay = request_json("GET", detail_url)
+    expect(status_code == 200, f"failed to fetch admin detail after replay: {status_code} {detail_after_replay}")
+    actions_after = [item["action"] for item in detail_after_replay.get("auditLogs", [])]
+    expect(
+        actions_after.count("ORDER_PAID") == order_paid_count_before,
+        "replayed stripe webhook duplicated ORDER_PAID audit log",
+    )
+    expect(
+        actions_after.count("RECHARGE_SUCCESS") == recharge_success_count_before,
+        "replayed stripe webhook duplicated RECHARGE_SUCCESS audit log",
+    )
+
     result = {
         "orderId": order_id,
         "statusAccessToken": status_access_token,
@@ -164,6 +208,12 @@ def main() -> int:
         "expectedBalance": expected_balance,
         "status": final_status,
         "userOrder": latest_order,
+        "replay": {
+            "response": replay_response,
+            "balanceAfterReplay": replay_balance,
+            "orderPaidCount": actions_after.count("ORDER_PAID"),
+            "rechargeSuccessCount": actions_after.count("RECHARGE_SUCCESS"),
+        },
     }
 
     output = json.dumps(result, indent=2)
