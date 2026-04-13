@@ -98,16 +98,17 @@ impl ProviderInstanceRepository {
 
     pub async fn create(&self, input: ProviderInstanceWrite) -> Result<ProviderInstanceRecord> {
         let id = Uuid::new_v4().to_string();
-        let conn = self.db.connect()?;
         let params = write_params(&id, &input);
+        let tx = self.db.begin_concurrent().await?;
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO payment_provider_instances (id, provider_key, name, config, supported_types, enabled, sort_order, limits, refund_enabled, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch(), unixepoch())",
             params,
         )
         .await
         .with_context(|| format!("failed to create provider instance {id}"))?;
+        tx.commit().await?;
 
         self.get(&id)
             .await?
@@ -119,10 +120,10 @@ impl ProviderInstanceRepository {
         id: &str,
         input: ProviderInstanceWrite,
     ) -> Result<Option<ProviderInstanceRecord>> {
-        let conn = self.db.connect()?;
         let params = write_params(id, &input);
+        let tx = self.db.begin_concurrent().await?;
 
-        conn.execute(
+        tx.execute(
             "UPDATE payment_provider_instances
              SET provider_key = ?2,
                  name = ?3,
@@ -138,15 +139,17 @@ impl ProviderInstanceRepository {
         )
         .await
         .with_context(|| format!("failed to update provider instance {id}"))?;
+        tx.commit().await?;
 
         self.get(id).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        conn.execute("DELETE FROM payment_provider_instances WHERE id = ?1", [id])
+        let tx = self.db.begin_concurrent().await?;
+        tx.execute("DELETE FROM payment_provider_instances WHERE id = ?1", [id])
             .await
             .with_context(|| format!("failed to delete provider instance {id}"))?;
+        tx.commit().await?;
         Ok(true)
     }
 

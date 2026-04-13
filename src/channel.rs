@@ -89,15 +89,16 @@ impl ChannelRepository {
 
     pub async fn create(&self, input: ChannelWrite) -> Result<ChannelRecord> {
         let id = Uuid::new_v4().to_string();
-        let conn = self.db.connect()?;
+        let tx = self.db.begin_concurrent().await?;
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO channels (id, group_id, name, platform, rate_multiplier_bps, description, models, features, sort_order, enabled, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, unixepoch(), unixepoch())",
             write_params(&id, &input),
         )
         .await
         .with_context(|| format!("failed to create channel {id}"))?;
+        tx.commit().await?;
 
         self.get(&id)
             .await?
@@ -105,8 +106,8 @@ impl ChannelRepository {
     }
 
     pub async fn replace(&self, id: &str, input: ChannelWrite) -> Result<Option<ChannelRecord>> {
-        let conn = self.db.connect()?;
-        conn.execute(
+        let tx = self.db.begin_concurrent().await?;
+        tx.execute(
             "UPDATE channels
              SET group_id = ?2,
                  name = ?3,
@@ -123,16 +124,18 @@ impl ChannelRepository {
         )
         .await
         .with_context(|| format!("failed to update channel {id}"))?;
+        tx.commit().await?;
 
         self.get(id).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute("DELETE FROM channels WHERE id = ?1", [id])
             .await
             .with_context(|| format!("failed to delete channel {id}"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -259,10 +262,8 @@ mod tests {
     use crate::db::DatabaseHandle;
 
     async fn test_repo() -> ChannelRepository {
-        let path = std::env::temp_dir().join(format!(
-            "opay-channel-repo-{}.db",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("opay-channel-repo-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
         ChannelRepository::new(db)

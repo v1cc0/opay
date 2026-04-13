@@ -9,12 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
-import time
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,14 +23,6 @@ class SeededOrders:
     cancel_order_id: str
     retry_order_id: str
     refund_order_id: str
-
-
-def unix_now() -> int:
-    return int(time.time())
-
-
-def generate_recharge_code(label: str) -> str:
-    return f"SMOKE-{label.upper()}-{uuid.uuid4().hex[:12].upper()}"
 
 
 def request_json(method: str, url: str, body: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
@@ -52,151 +42,31 @@ def request_json(method: str, url: str, body: dict[str, Any] | None = None) -> t
         return exc.code, payload
 
 
-def delete_previous_seed_data(conn: sqlite3.Connection) -> None:
-    order_ids = [
-        row[0]
-        for row in conn.execute(
-            "SELECT id FROM orders WHERE src_host = 'admin-smoke'"
-        ).fetchall()
-    ]
-    if order_ids:
-        conn.executemany("DELETE FROM audit_logs WHERE order_id = ?", [(order_id,) for order_id in order_ids])
-    conn.execute("DELETE FROM orders WHERE src_host = 'admin-smoke'")
-    conn.commit()
-
-
 def seed_orders(db_path: Path, user_id: int) -> SeededOrders:
-    conn = sqlite3.connect(db_path, timeout=30)
-    try:
-        conn.execute("PRAGMA busy_timeout = 30000")
-        delete_previous_seed_data(conn)
-        now = unix_now()
-
-        cancel_order_id = str(uuid.uuid4())
-        retry_order_id = str(uuid.uuid4())
-        refund_order_id = str(uuid.uuid4())
-
-        orders = [
-            {
-                "id": cancel_order_id,
-                "user_id": user_id,
-                "amount_cents": 2100,
-                "pay_amount_cents": 2100,
-                "status": "PENDING",
-                "payment_type": "stripe",
-                "payment_trade_no": None,
-                "expires_at": now + 600,
-                "paid_at": None,
-                "completed_at": None,
-                "failed_at": None,
-                "failed_reason": None,
-                "order_type": "balance",
-                "provider_instance_id": None,
-                "created_at": now - 3,
-                "updated_at": now - 3,
-                "recharge_code": generate_recharge_code("cancel"),
-            },
-            {
-                "id": retry_order_id,
-                "user_id": user_id,
-                "amount_cents": 3200,
-                "pay_amount_cents": 3200,
-                "status": "FAILED",
-                "payment_type": "stripe",
-                "payment_trade_no": "pi_smoke_retry_local",
-                "expires_at": now - 500,
-                "paid_at": now - 480,
-                "completed_at": None,
-                "failed_at": now - 470,
-                "failed_reason": "mock recharge failure",
-                "order_type": "balance",
-                "provider_instance_id": None,
-                "created_at": now - 20,
-                "updated_at": now - 20,
-                "recharge_code": generate_recharge_code("retry"),
-            },
-            {
-                "id": refund_order_id,
-                "user_id": user_id,
-                "amount_cents": 4500,
-                "pay_amount_cents": 4500,
-                "status": "COMPLETED",
-                "payment_type": "stripe",
-                "payment_trade_no": None,
-                "expires_at": now - 1000,
-                "paid_at": now - 980,
-                "completed_at": now - 970,
-                "failed_at": None,
-                "failed_reason": None,
-                "order_type": "balance",
-                "provider_instance_id": None,
-                "created_at": now - 40,
-                "updated_at": now - 40,
-                "recharge_code": generate_recharge_code("refund"),
-            },
-        ]
-
-        for order in orders:
-            conn.execute(
-                """
-                INSERT INTO orders (
-                  id, user_id, amount_cents, pay_amount_cents, fee_rate_bps, recharge_code,
-                  status, payment_type, payment_trade_no, expires_at, paid_at, completed_at,
-                  failed_at, failed_reason, created_at, updated_at, src_host, order_type,
-                  provider_instance_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    order["id"],
-                    order["user_id"],
-                    order["amount_cents"],
-                    order["pay_amount_cents"],
-                    0,
-                    order["recharge_code"],
-                    order["status"],
-                    order["payment_type"],
-                    order["payment_trade_no"],
-                    order["expires_at"],
-                    order["paid_at"],
-                    order["completed_at"],
-                    order["failed_at"],
-                    order["failed_reason"],
-                    order["created_at"],
-                    order["updated_at"],
-                    "admin-smoke",
-                    order["order_type"],
-                    order["provider_instance_id"],
-                ),
-            )
-            conn.execute(
-                """
-                INSERT INTO audit_logs (id, order_id, action, detail, operator, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(uuid.uuid4()),
-                    order["id"],
-                    "ORDER_CREATED",
-                    json.dumps(
-                        {
-                            "seed": "admin-smoke",
-                            "status": order["status"],
-                            "amountCents": order["amount_cents"],
-                        }
-                    ),
-                    "seed:admin-smoke",
-                    order["created_at"],
-                ),
-            )
-
-        conn.commit()
-        return SeededOrders(
-            cancel_order_id=cancel_order_id,
-            retry_order_id=retry_order_id,
-            refund_order_id=refund_order_id,
-        )
-    finally:
-        conn.close()
+    result = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "--example",
+            "seed_admin_orders",
+            "--",
+            "--db-path",
+            str(db_path),
+            "--user-id",
+            str(user_id),
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(result.stdout)
+    data = payload["seededOrders"]
+    return SeededOrders(
+        cancel_order_id=data["cancel"],
+        retry_order_id=data["retry"],
+        refund_order_id=data["refund"],
+    )
 
 
 def seeded_orders_to_dict(seeded: SeededOrders) -> dict[str, str]:

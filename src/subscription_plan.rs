@@ -120,14 +120,15 @@ impl SubscriptionPlanRepository {
 
     pub async fn create(&self, input: SubscriptionPlanWrite) -> Result<SubscriptionPlanRecord> {
         let id = uuid::Uuid::new_v4().to_string();
-        let conn = self.db.connect()?;
-        conn.execute(
+        let tx = self.db.begin_concurrent().await?;
+        tx.execute(
             "INSERT INTO subscription_plans (id, group_id, name, description, price_cents, original_price_cents, validity_days, validity_unit, features, product_name, for_sale, sort_order, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, unixepoch(), unixepoch())",
             write_params(&id, &input),
         )
         .await
         .with_context(|| format!("failed to create subscription plan {id}"))?;
+        tx.commit().await?;
 
         self.get_by_id(&id)
             .await?
@@ -139,8 +140,8 @@ impl SubscriptionPlanRepository {
         id: &str,
         input: SubscriptionPlanWrite,
     ) -> Result<Option<SubscriptionPlanRecord>> {
-        let conn = self.db.connect()?;
-        conn.execute(
+        let tx = self.db.begin_concurrent().await?;
+        tx.execute(
             "UPDATE subscription_plans
              SET group_id = ?2,
                  name = ?3,
@@ -159,16 +160,18 @@ impl SubscriptionPlanRepository {
         )
         .await
         .with_context(|| format!("failed to update subscription plan {id}"))?;
+        tx.commit().await?;
 
         self.get_by_id(id).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute("DELETE FROM subscription_plans WHERE id = ?1", [id])
             .await
             .with_context(|| format!("failed to delete subscription plan {id}"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 

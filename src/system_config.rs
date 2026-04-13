@@ -114,7 +114,7 @@ impl SystemConfigService {
     }
 
     pub async fn set_many(&self, items: &[UpsertSystemConfig]) -> Result<()> {
-        let conn = self.db.connect()?;
+        let tx = self.db.begin_concurrent().await?;
 
         for item in items {
             let params = Params::Positional(vec![
@@ -124,7 +124,7 @@ impl SystemConfigService {
                 item.label.clone().map(Value::Text).unwrap_or(Value::Null),
             ]);
 
-            conn.execute(
+            tx.execute(
                 "INSERT INTO system_configs (key, value, group_name, label, updated_at)
                  VALUES (?1, ?2, ?3, ?4, unixepoch())
                  ON CONFLICT(key) DO UPDATE SET
@@ -136,7 +136,9 @@ impl SystemConfigService {
             )
             .await
             .with_context(|| format!("failed to upsert system config {}", item.key))?;
-
+        }
+        tx.commit().await?;
+        for item in items {
             self.invalidate(Some(&item.key)).await;
         }
 

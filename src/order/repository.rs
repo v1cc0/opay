@@ -267,7 +267,7 @@ impl OrderRepository {
     pub async fn insert_pending(&self, input: NewPendingOrder) -> Result<OrderRecord> {
         let id = Uuid::new_v4().to_string();
         let recharge_code = generate_recharge_code(&id);
-        let conn = self.db.connect()?;
+        let tx = self.db.begin_concurrent().await?;
         let params = Params::Positional(vec![
             Value::Text(id.clone()),
             Value::Integer(input.user_id),
@@ -300,13 +300,14 @@ impl OrderRepository {
             Value::Integer(input.expires_at),
         ]);
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO orders (id, user_id, amount_cents, pay_amount_cents, fee_rate_bps, recharge_code, status, payment_type, order_type, plan_id, subscription_group_id, subscription_days, provider_instance_id, expires_at, created_at, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, unixepoch(), unixepoch())",
             params,
         )
         .await
         .with_context(|| format!("failed to insert pending order {id}"))?;
+        tx.commit().await?;
 
         self.get_by_id(&id)
             .await?
@@ -314,8 +315,8 @@ impl OrderRepository {
     }
 
     pub async fn mark_status_if_pending(&self, order_id: &str, status: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders SET status = ?1, updated_at = unixepoch() WHERE id = ?2 AND status = 'PENDING'",
                 Params::Positional(vec![
@@ -325,6 +326,7 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to update pending order {order_id} to {status}"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -332,8 +334,8 @@ impl OrderRepository {
         &self,
         input: MarkPaidInput,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'PAID',
@@ -358,12 +360,13 @@ impl OrderRepository {
             )
             .await
             .context("failed to mark order as paid")?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn mark_recharging_if_paid_or_failed(&self, order_id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'RECHARGING',
@@ -374,12 +377,13 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to lock order {order_id} for fulfillment"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn reset_to_paid_if_retryable(&self, order_id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'PAID',
@@ -393,12 +397,13 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to reset order {order_id} to PAID for retry"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn mark_refund_requested(&self, input: MarkRefundRequestedInput) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'REFUND_REQUESTED',
@@ -425,12 +430,13 @@ impl OrderRepository {
             )
             .await
             .context("failed to mark refund requested")?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn mark_refunding_if_refundable(&self, order_id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'REFUNDING',
@@ -441,6 +447,7 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to lock order {order_id} for refund"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -449,8 +456,8 @@ impl OrderRepository {
         order_id: &str,
         restore_status: &str,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = ?1,
@@ -468,6 +475,7 @@ impl OrderRepository {
             .with_context(|| {
                 format!("failed to restore order {order_id} after refund gateway failure")
             })?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -477,8 +485,8 @@ impl OrderRepository {
         failed_reason: &str,
         failed_at: i64,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'REFUND_FAILED',
@@ -495,13 +503,14 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to mark order {order_id} refund failed"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn mark_refunded(&self, input: MarkRefundedInput) -> Result<bool> {
-        let conn = self.db.connect()?;
         let order_id = input.order_id.clone();
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = ?1,
@@ -525,6 +534,7 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to mark order {} refunded", order_id))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -533,8 +543,8 @@ impl OrderRepository {
         order_id: &str,
         completed_at: i64,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'COMPLETED',
@@ -551,6 +561,7 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to mark order {order_id} completed"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -560,8 +571,8 @@ impl OrderRepository {
         failed_reason: &str,
         failed_at: i64,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET status = 'FAILED',
@@ -578,6 +589,7 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to mark order {order_id} failed"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -588,8 +600,8 @@ impl OrderRepository {
         pay_url: Option<&str>,
         qr_code: Option<&str>,
     ) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute(
                 "UPDATE orders
                  SET payment_trade_no = ?1,
@@ -610,15 +622,17 @@ impl OrderRepository {
             )
             .await
             .with_context(|| format!("failed to set payment details for order {order_id}"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
     pub async fn delete_by_id(&self, order_id: &str) -> Result<bool> {
-        let conn = self.db.connect()?;
-        let affected = conn
+        let tx = self.db.begin_concurrent().await?;
+        let affected = tx
             .execute("DELETE FROM orders WHERE id = ?1", [order_id])
             .await
             .with_context(|| format!("failed to delete order {order_id}"))?;
+        tx.commit().await?;
         Ok(affected > 0)
     }
 
@@ -770,8 +784,7 @@ mod tests {
     use crate::db::DatabaseHandle;
 
     async fn test_repo() -> OrderRepository {
-        let path =
-            std::env::temp_dir().join(format!("opay-test-{}.db", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("opay-test-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
         OrderRepository::new(db)

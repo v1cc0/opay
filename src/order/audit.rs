@@ -34,7 +34,7 @@ impl AuditLogRepository {
 
     pub async fn append(&self, entry: NewAuditLog) -> Result<String> {
         let id = Uuid::new_v4().to_string();
-        let conn = self.db.connect()?;
+        let tx = self.db.begin_concurrent().await?;
         let params = Params::Positional(vec![
             Value::Text(id.clone()),
             Value::Text(entry.order_id),
@@ -43,12 +43,13 @@ impl AuditLogRepository {
             entry.operator.map(Value::Text).unwrap_or(Value::Null),
         ]);
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO audit_logs (id, order_id, action, detail, operator, created_at) VALUES (?1, ?2, ?3, ?4, ?5, unixepoch())",
             params,
         )
         .await
         .with_context(|| format!("failed to append audit log {id}"))?;
+        tx.commit().await?;
 
         Ok(id)
     }
