@@ -135,12 +135,35 @@ def main() -> int:
         summary["stripeMockConfig"] = json.loads(stripe_config_output)
         summary["steps"].append("configured_stripe_mock")
 
+        easypay_config_output = run_capture(
+            [
+                sys.executable,
+                "scripts/configure_local_easypay_mock.py",
+                "--api-base",
+                args.api_base,
+                "--admin-token",
+                args.admin_token,
+                "--payment-api-base",
+                f"http://127.0.0.1:{args.stripe_port}",
+            ],
+            repo_root,
+        )
+        summary["easyPayMockConfig"] = json.loads(easypay_config_output)
+        summary["steps"].append("configured_easypay_mock")
+
         webhook_output = run_capture(
             [sys.executable, "scripts/stripe_webhook_completion_smoke.py"],
             repo_root,
         )
         summary["stripeWebhookCompletion"] = json.loads(webhook_output)
         summary["steps"].append("stripe_webhook_completion")
+
+        easy_pay_output = run_capture(
+            [sys.executable, "scripts/easypay_notify_completion_smoke.py"],
+            repo_root,
+        )
+        summary["easyPayNotifyCompletion"] = json.loads(easy_pay_output)
+        summary["steps"].append("easypay_notify_completion")
 
         backend.stop()
         seed_output = run_capture(

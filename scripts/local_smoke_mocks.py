@@ -3,7 +3,7 @@
 
 Starts two lightweight HTTP servers:
 - Platform mock on 127.0.0.1:18080
-- Stripe mock on 127.0.0.1:18081
+- Payment provider mock on 127.0.0.1:18081
 
 Only uses Python stdlib so it can run anywhere we have Python 3.
 """
@@ -251,11 +251,11 @@ class PlatformHandler(BaseHTTPRequestHandler):
         return json_response(self, {"error": f"Unhandled POST {path}", "body": body}, status=404)
 
 
-class StripeHandler(BaseHTTPRequestHandler):
-    server_version = "OPayStripeMock/0.1"
+class PaymentProviderHandler(BaseHTTPRequestHandler):
+    server_version = "OPayPaymentProviderMock/0.1"
 
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"[stripe] {self.address_string()} - {format % args}")
+        print(f"[payments] {self.address_string()} - {format % args}")
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
@@ -287,6 +287,32 @@ class StripeHandler(BaseHTTPRequestHandler):
                 },
             )
 
+        if path == "/mapi.php":
+            out_trade_no = (form.get("out_trade_no") or [f"order-{uuid.uuid4().hex[:8]}"])[0]
+            payment_type = (form.get("type") or ["alipay"])[0]
+            return json_response(
+                self,
+                {
+                    "code": 1,
+                    "msg": "success",
+                    "trade_no": f"easy_trade_{uuid.uuid4().hex[:12]}",
+                    "payurl": f"https://mock-easypay.local/pay/{payment_type}/{out_trade_no}",
+                    "payurl2": f"https://mock-easypay.local/mobile/{payment_type}/{out_trade_no}",
+                    "qrcode": f"easypay://mock/{payment_type}/{out_trade_no}",
+                    "captured_form": form,
+                },
+            )
+
+        if path == "/api.php" and parsed.query == "act=refund":
+            return json_response(
+                self,
+                {
+                    "code": 1,
+                    "msg": "success",
+                    "captured_form": form,
+                },
+            )
+
         return json_response(self, {"error": f"Unhandled POST {path}", "form": form}, status=404)
 
 
@@ -310,12 +336,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run local OPay smoke mocks")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--platform-port", type=int, default=18080)
-    parser.add_argument("--stripe-port", type=int, default=18081)
+    parser.add_argument("--payment-port", type=int, default=18081)
     args = parser.parse_args()
 
     state = MockState()
     platform_server = start_server("platform", args.host, args.platform_port, PlatformHandler, state)
-    stripe_server = start_server("stripe", args.host, args.stripe_port, StripeHandler)
+    payment_server = start_server("payments", args.host, args.payment_port, PaymentProviderHandler)
 
     print("[local-smoke-mocks] ready")
     try:
@@ -325,9 +351,9 @@ def main() -> int:
         print("\n[local-smoke-mocks] shutting down")
     finally:
         platform_server.shutdown()
-        stripe_server.shutdown()
+        payment_server.shutdown()
         platform_server.server_close()
-        stripe_server.server_close()
+        payment_server.server_close()
     return 0
 
 
