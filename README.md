@@ -156,6 +156,21 @@ python3 scripts/run_local_smoke_suite.py
 - 汇总：`/tmp/opay-local-smoke-suite.json`
 - 日志目录：`/tmp/opay-local-smoke-logs/`
 
+如果你想把浏览器 smoke 也一起跑进去，可以显式打开：
+
+```bash
+python3 scripts/run_local_smoke_suite.py \
+  --with-browser \
+  --browser-runner-cmd "node /home/vc/.codex/skills/playwright-skill/run.js"
+```
+
+带浏览器模式会额外校验：
+
+- Stripe 结果页
+- EasyPay 结果页
+- 用户订单页
+- 管理员订单页
+
 ---
 
 ## 6. 常用单项脚本

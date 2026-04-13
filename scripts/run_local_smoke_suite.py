@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import signal
+import shlex
 import subprocess
 import sys
 import time
@@ -75,6 +76,35 @@ def run_print(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def run_check(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    subprocess.run(cmd, cwd=cwd, check=True, env=merged_env)
+
+
+def run_check_to_log(
+    cmd: list[str],
+    cwd: Path,
+    log_path: Path,
+    env: dict[str, str] | None = None,
+) -> None:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("w") as log_file:
+        subprocess.run(
+            cmd,
+            cwd=cwd,
+            check=True,
+            env=merged_env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2))
 
@@ -90,6 +120,9 @@ def main() -> int:
     parser.add_argument("--user-id", type=int, default=42)
     parser.add_argument("--output", default="/tmp/opay-local-smoke-suite.json")
     parser.add_argument("--logs-dir", default="/tmp/opay-local-smoke-logs")
+    parser.add_argument("--with-browser", action="store_true")
+    parser.add_argument("--browser-base-url", default="http://127.0.0.1:8787")
+    parser.add_argument("--browser-runner-cmd", default=os.environ.get("OPAY_BROWSER_RUNNER_CMD", ""))
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
@@ -109,6 +142,12 @@ def main() -> int:
         repo_root,
         logs_dir / "backend.log",
     )
+    frontend = ManagedProcess(
+        "frontend",
+        ["pnpm", "--dir", "frontend", "cf:dev", "--", "--port", "8787"],
+        repo_root,
+        logs_dir / "frontend.log",
+    )
 
     summary: dict[str, Any] = {"steps": []}
     try:
@@ -118,6 +157,16 @@ def main() -> int:
         backend.start()
         health = wait_for_json(args.health_url, timeout_seconds=45)
         summary["health"] = health
+
+        browser_enabled = bool(args.with_browser)
+        browser_runner_cmd = args.browser_runner_cmd.strip()
+        if browser_enabled:
+            if not browser_runner_cmd:
+                raise RuntimeError(
+                    "--with-browser requires --browser-runner-cmd or OPAY_BROWSER_RUNNER_CMD"
+                )
+            frontend.start()
+            wait_for_json(f"{args.browser_base_url}/healthz", timeout_seconds=60)
 
         stripe_config_output = run_capture(
             [
@@ -232,9 +281,31 @@ def main() -> int:
         summary["steps"].append("concurrent_write_smoke")
 
         write_json(output_path, summary)
+
+        if browser_enabled:
+            browser_result_path = logs_dir / "browser_smoke_result.json"
+            browser_output_dir = logs_dir / "browser"
+            browser_output_dir.mkdir(parents=True, exist_ok=True)
+            run_check_to_log(
+                shlex.split(browser_runner_cmd) + [str(repo_root / "scripts" / "browser_smoke_suite.js")],
+                repo_root,
+                logs_dir / "browser_smoke.log",
+                env={
+                    "OPAY_SMOKE_SUMMARY_PATH": str(output_path),
+                    "OPAY_BROWSER_RESULT_PATH": str(browser_result_path),
+                    "OPAY_BROWSER_OUTPUT_DIR": str(browser_output_dir),
+                    "OPAY_BROWSER_BASE_URL": args.browser_base_url,
+                    "OPAY_BROWSER_HEADLESS": "1",
+                },
+            )
+            summary["browserSmoke"] = json.loads(browser_result_path.read_text())
+            summary["steps"].append("browser_smoke")
+
+        write_json(output_path, summary)
         print(json.dumps(summary, indent=2))
         return 0
     finally:
+        frontend.stop()
         backend.stop()
         mocks.stop()
 

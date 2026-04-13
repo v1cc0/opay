@@ -214,3 +214,11 @@ python3 scripts/run_local_smoke_suite.py
 ```
 
 那样验证的是整条业务链路，而不只是页面能不能打开。
+
+如果你要把前端真实页面检查也一并带上，可以从仓库根目录运行：
+
+```bash
+python3 scripts/run_local_smoke_suite.py \
+  --with-browser \
+  --browser-runner-cmd "node /home/vc/.codex/skills/playwright-skill/run.js"
+```
