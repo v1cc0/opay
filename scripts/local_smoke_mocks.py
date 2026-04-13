@@ -40,6 +40,7 @@ class MockState:
     subscription_expires_at: str = field(default_factory=lambda: iso_now(30))
     fail_next_balance_redeem: int = 0
     fail_next_subscription_redeem: int = 0
+    fail_next_balance_add: int = 0
     fail_next_stripe_refund: int = 0
     fail_next_easypay_refund: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -218,6 +219,8 @@ class PlatformHandler(BaseHTTPRequestHandler):
                     self.state.fail_next_balance_redeem = int(body["fail_next_balance_redeem"] or 0)
                 if "fail_next_subscription_redeem" in body:
                     self.state.fail_next_subscription_redeem = int(body["fail_next_subscription_redeem"] or 0)
+                if "fail_next_balance_add" in body:
+                    self.state.fail_next_balance_add = int(body["fail_next_balance_add"] or 0)
                 if "fail_next_stripe_refund" in body:
                     self.state.fail_next_stripe_refund = int(body["fail_next_stripe_refund"] or 0)
                 if "fail_next_easypay_refund" in body:
@@ -229,6 +232,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
                     "state": {
                         "fail_next_balance_redeem": self.state.fail_next_balance_redeem,
                         "fail_next_subscription_redeem": self.state.fail_next_subscription_redeem,
+                        "fail_next_balance_add": self.state.fail_next_balance_add,
                         "fail_next_stripe_refund": self.state.fail_next_stripe_refund,
                         "fail_next_easypay_refund": self.state.fail_next_easypay_refund,
                     },
@@ -276,6 +280,13 @@ class PlatformHandler(BaseHTTPRequestHandler):
             amount = float(body.get("balance") or 0)
             operation = body.get("operation")
             with self.state.lock:
+                if operation == "add" and self.state.fail_next_balance_add > 0:
+                    self.state.fail_next_balance_add -= 1
+                    return json_response(
+                        self,
+                        {"error": "mock balance add failure"},
+                        status=500,
+                    )
                 if operation == "add":
                     self.state.balance += amount
                 elif operation == "subtract":

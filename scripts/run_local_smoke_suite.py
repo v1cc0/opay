@@ -172,6 +172,13 @@ def main() -> int:
         summary["stripeRefundRecovery"] = json.loads(stripe_refund_recovery_output)
         summary["steps"].append("stripe_refund_recovery")
 
+        stripe_refund_manual_recovery_output = run_capture(
+            [sys.executable, "scripts/stripe_refund_manual_recovery_smoke.py"],
+            repo_root,
+        )
+        summary["stripeRefundManualRecovery"] = json.loads(stripe_refund_manual_recovery_output)
+        summary["steps"].append("stripe_refund_manual_recovery")
+
         easy_pay_output = run_capture(
             [sys.executable, "scripts/easypay_notify_completion_smoke.py"],
             repo_root,
