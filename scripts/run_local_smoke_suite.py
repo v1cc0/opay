@@ -158,6 +158,13 @@ def main() -> int:
         summary["stripeWebhookCompletion"] = json.loads(webhook_output)
         summary["steps"].append("stripe_webhook_completion")
 
+        stripe_recovery_output = run_capture(
+            [sys.executable, "scripts/stripe_recovery_smoke.py"],
+            repo_root,
+        )
+        summary["stripeRecovery"] = json.loads(stripe_recovery_output)
+        summary["steps"].append("stripe_recovery")
+
         easy_pay_output = run_capture(
             [sys.executable, "scripts/easypay_notify_completion_smoke.py"],
             repo_root,

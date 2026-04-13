@@ -38,6 +38,8 @@ class MockState:
     subscription_id: int = 501
     subscription_status: str = "active"
     subscription_expires_at: str = field(default_factory=lambda: iso_now(30))
+    fail_next_balance_redeem: int = 0
+    fail_next_subscription_redeem: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def platform_user(self) -> dict[str, Any]:
@@ -208,10 +210,41 @@ class PlatformHandler(BaseHTTPRequestHandler):
         path = parsed.path
         body = read_json(self)
 
+        if path == "/__control/failures":
+            with self.state.lock:
+                if "fail_next_balance_redeem" in body:
+                    self.state.fail_next_balance_redeem = int(body["fail_next_balance_redeem"] or 0)
+                if "fail_next_subscription_redeem" in body:
+                    self.state.fail_next_subscription_redeem = int(body["fail_next_subscription_redeem"] or 0)
+            return json_response(
+                self,
+                {
+                    "success": True,
+                    "state": {
+                        "fail_next_balance_redeem": self.state.fail_next_balance_redeem,
+                        "fail_next_subscription_redeem": self.state.fail_next_subscription_redeem,
+                    },
+                },
+            )
+
         if path == "/api/v1/admin/redeem-codes/create-and-redeem":
             value = float(body.get("value") or 0)
             redeem_type = body.get("type")
             with self.state.lock:
+                if redeem_type == "balance" and self.state.fail_next_balance_redeem > 0:
+                    self.state.fail_next_balance_redeem -= 1
+                    return json_response(
+                        self,
+                        {"error": "mock balance redeem failure"},
+                        status=500,
+                    )
+                if redeem_type == "subscription" and self.state.fail_next_subscription_redeem > 0:
+                    self.state.fail_next_subscription_redeem -= 1
+                    return json_response(
+                        self,
+                        {"error": "mock subscription redeem failure"},
+                        status=500,
+                    )
                 if redeem_type == "balance":
                     self.state.balance += value
                 elif redeem_type == "subscription":
