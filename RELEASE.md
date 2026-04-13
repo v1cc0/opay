@@ -32,6 +32,7 @@ python3 scripts/run_local_smoke_suite.py \
 - `Cargo.lock`
 - `frontend/package.json`
 - 根 `README.md`（如果版本文案有变化）
+- `CHANGELOG.md`
 
 ---
 

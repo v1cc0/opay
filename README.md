@@ -270,3 +270,5 @@ pkill -f '/home/vc/.cargo/target/debug/opay|scripts/local_smoke_mocks.py|wrangle
 ## 10. 版本
 
 当前发布版本：`v0.1.1`
+
+变更记录见：`CHANGELOG.md`
