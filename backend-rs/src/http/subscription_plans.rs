@@ -9,7 +9,7 @@ use crate::{
     AppState,
     error::{AppError, AppResult},
     http::common::{message, resolve_locale},
-    sub2api::Sub2ApiGroup,
+    platform::PlatformGroup,
     subscription_plan::{SubscriptionPlanRecord, SubscriptionPlanRepository},
 };
 
@@ -68,14 +68,14 @@ async fn list_subscription_plans(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| AppError::unauthorized(message(locale, "缺少 token", "Missing token")))?;
 
-    let sub2api = state.sub2api.as_ref().ok_or_else(|| {
+    let platform = state.platform.as_ref().ok_or_else(|| {
         AppError::public_internal(message(
             locale,
             "获取订阅套餐失败",
             "Failed to list subscription plans",
         ))
     })?;
-    sub2api
+    platform
         .get_current_user_by_token(token)
         .await
         .map_err(|error| {
@@ -90,7 +90,7 @@ async fn list_subscription_plans(
             }
         })?;
 
-    let admin_api_key = sub2api_admin_api_key(&state).await?;
+    let admin_api_key = platform_admin_api_key(&state).await?;
     let repo = SubscriptionPlanRepository::new(state.db.clone());
     let plans = repo.list_for_sale().await.map_err(AppError::internal)?;
 
@@ -100,7 +100,7 @@ async fn list_subscription_plans(
             continue;
         };
 
-        let group = match sub2api.get_group(group_id, &admin_api_key).await {
+        let group = match platform.get_group(group_id, &admin_api_key).await {
             Ok(Some(group)) if group.status == "active" => group,
             _ => continue,
         };
@@ -113,7 +113,7 @@ async fn list_subscription_plans(
 
 fn to_subscription_plan_view(
     plan: SubscriptionPlanRecord,
-    group: Sub2ApiGroup,
+    group: PlatformGroup,
 ) -> SubscriptionPlanView {
     SubscriptionPlanView {
         id: plan.id,
@@ -153,10 +153,10 @@ fn cents_to_amount(value: i64) -> f64 {
     (value as f64) / 100.0
 }
 
-async fn sub2api_admin_api_key(state: &AppState) -> AppResult<String> {
+async fn platform_admin_api_key(state: &AppState) -> AppResult<String> {
     let value = state
         .system_config
-        .get("SUB2API_ADMIN_API_KEY")
+        .get("PLATFORM_ADMIN_API_KEY")
         .await
         .map_err(AppError::internal)?
         .unwrap_or_default();
@@ -188,7 +188,7 @@ mod tests {
         config::AppConfig,
         db::DatabaseHandle,
         order::{audit::AuditLogRepository, repository::OrderRepository, service::OrderService},
-        sub2api::Sub2ApiClient,
+        platform::PlatformClient,
         subscription_plan::SubscriptionPlanRepository,
         system_config::{SystemConfigService, UpsertSystemConfig},
     };
@@ -198,7 +198,7 @@ mod tests {
         id: i64,
     }
 
-    async fn test_state(sub2api_base_url: Option<String>) -> AppState {
+    async fn test_state(platform_base_url: Option<String>) -> AppState {
         let db_path = std::env::temp_dir().join(format!(
             "opay-subscription-plans-route-{}.db",
             Uuid::new_v4()
@@ -213,8 +213,8 @@ mod tests {
             payment_providers: Vec::new(),
             admin_token: Some("test-admin-token".to_string()),
             system_config_cache_ttl_secs: 1,
-            sub2api_base_url: sub2api_base_url.clone(),
-            sub2api_timeout_secs: 2,
+            platform_base_url: platform_base_url.clone(),
+            platform_timeout_secs: 2,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -224,25 +224,25 @@ mod tests {
         });
 
         let system_config = SystemConfigService::new(db.clone(), Duration::from_secs(1));
-        let sub2api = sub2api_base_url.map(|base_url| Sub2ApiClient::new(base_url, 2));
+        let platform = platform_base_url.map(|base_url| PlatformClient::new(base_url, 2));
 
         AppState {
             config: Arc::clone(&config),
             db: db.clone(),
             system_config: system_config.clone(),
-            sub2api: sub2api.clone(),
+            platform: platform.clone(),
             order_service: OrderService::new(
                 Arc::clone(&config),
                 OrderRepository::new(db.clone()),
                 AuditLogRepository::new(db.clone()),
                 SubscriptionPlanRepository::new(db.clone()),
                 system_config,
-                sub2api,
+                platform,
             ),
         }
     }
 
-    async fn start_mock_sub2api() -> (String, JoinHandle<()>) {
+    async fn start_mock_platform() -> (String, JoinHandle<()>) {
         async fn auth_me(State(user): State<MockAuthUser>) -> Json<serde_json::Value> {
             Json(json!({
                 "data": {
@@ -300,12 +300,12 @@ mod tests {
 
     #[tokio::test]
     async fn returns_only_active_plans_with_group_details() {
-        let (base_url, handle) = start_mock_sub2api().await;
+        let (base_url, handle) = start_mock_platform().await;
         let state = test_state(Some(base_url)).await;
         state
             .system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,

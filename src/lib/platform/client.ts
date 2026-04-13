@@ -1,14 +1,14 @@
 import { getEnv } from '@/lib/config';
 import { getSystemConfig } from '@/lib/system-config';
-import type { Sub2ApiUser, Sub2ApiRedeemCode, Sub2ApiGroup, Sub2ApiSubscription } from './types';
+import type { PlatformUser, PlatformRedeemCode, PlatformGroup, PlatformSubscription } from './types';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const RECHARGE_TIMEOUT_MS = 30_000;
 const RECHARGE_MAX_ATTEMPTS = 2;
 
 async function getHeaders(idempotencyKey?: string): Promise<Record<string, string>> {
-  const dbValue = await getSystemConfig('SUB2API_ADMIN_API_KEY');
-  const apiKey = dbValue?.trim() || getEnv().SUB2API_ADMIN_API_KEY;
+  const dbValue = await getSystemConfig('PLATFORM_ADMIN_API_KEY');
+  const apiKey = dbValue?.trim() || getEnv().PLATFORM_ADMIN_API_KEY;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-api-key': apiKey,
@@ -24,9 +24,9 @@ function isRetryableFetchError(error: unknown): boolean {
   return error.name === 'TimeoutError' || error.name === 'AbortError' || error.name === 'TypeError';
 }
 
-export async function getCurrentUserByToken(token: string): Promise<Sub2ApiUser> {
+export async function getCurrentUserByToken(token: string): Promise<PlatformUser> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/auth/me`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -38,12 +38,12 @@ export async function getCurrentUserByToken(token: string): Promise<Sub2ApiUser>
   }
 
   const data = await response.json();
-  return data.data as Sub2ApiUser;
+  return data.data as PlatformUser;
 }
 
-export async function getUser(userId: number): Promise<Sub2ApiUser> {
+export async function getUser(userId: number): Promise<PlatformUser> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/users/${userId}`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/users/${userId}`, {
     headers: await getHeaders(),
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
@@ -54,7 +54,7 @@ export async function getUser(userId: number): Promise<Sub2ApiUser> {
   }
 
   const data = await response.json();
-  return data.data as Sub2ApiUser;
+  return data.data as PlatformUser;
 }
 
 export async function createAndRedeem(
@@ -63,9 +63,9 @@ export async function createAndRedeem(
   userId: number,
   notes: string,
   options?: { type?: 'balance' | 'subscription'; groupId?: number; validityDays?: number },
-): Promise<Sub2ApiRedeemCode> {
+): Promise<PlatformRedeemCode> {
   const env = getEnv();
-  const url = `${env.SUB2API_BASE_URL}/api/v1/admin/redeem-codes/create-and-redeem`;
+  const url = `${env.PLATFORM_BASE_URL}/api/v1/admin/redeem-codes/create-and-redeem`;
   const body = JSON.stringify({
     code,
     type: options?.type ?? 'balance',
@@ -95,13 +95,13 @@ export async function createAndRedeem(
       }
 
       const data = await response.json();
-      return data.redeem_code as Sub2ApiRedeemCode;
+      return data.redeem_code as PlatformRedeemCode;
     } catch (error) {
       lastError = error;
       if (attempt >= RECHARGE_MAX_ATTEMPTS || !isRetryableFetchError(error)) {
         throw error;
       }
-      console.warn(`Sub2API createAndRedeem attempt ${attempt} timed out, retrying...`);
+      console.warn(`Platform createAndRedeem attempt ${attempt} timed out, retrying...`);
     }
   }
 
@@ -110,9 +110,9 @@ export async function createAndRedeem(
 
 // ── 分组 API ──
 
-export async function getAllGroups(): Promise<Sub2ApiGroup[]> {
+export async function getAllGroups(): Promise<PlatformGroup[]> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/groups/all`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/groups/all`, {
     headers: await getHeaders(),
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
@@ -122,12 +122,12 @@ export async function getAllGroups(): Promise<Sub2ApiGroup[]> {
   }
 
   const data = await response.json();
-  return (data.data ?? []) as Sub2ApiGroup[];
+  return (data.data ?? []) as PlatformGroup[];
 }
 
-export async function getGroup(groupId: number): Promise<Sub2ApiGroup | null> {
+export async function getGroup(groupId: number): Promise<PlatformGroup | null> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/groups/${groupId}`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/groups/${groupId}`, {
     headers: await getHeaders(),
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
@@ -138,7 +138,7 @@ export async function getGroup(groupId: number): Promise<Sub2ApiGroup | null> {
   }
 
   const data = await response.json();
-  return data.data as Sub2ApiGroup;
+  return data.data as PlatformGroup;
 }
 
 // ── 订阅 API ──
@@ -149,16 +149,16 @@ export async function assignSubscription(
   validityDays: number,
   notes?: string,
   idempotencyKey?: string,
-): Promise<Sub2ApiSubscription> {
+): Promise<PlatformSubscription> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/subscriptions/assign`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/subscriptions/assign`, {
     method: 'POST',
     headers: await getHeaders(idempotencyKey),
     body: JSON.stringify({
       user_id: userId,
       group_id: groupId,
       validity_days: validityDays,
-      notes: notes || `Sub2ApiPay subscription order`,
+      notes: notes || `OPay subscription order`,
     }),
     signal: AbortSignal.timeout(RECHARGE_TIMEOUT_MS),
   });
@@ -169,12 +169,12 @@ export async function assignSubscription(
   }
 
   const data = await response.json();
-  return data.data as Sub2ApiSubscription;
+  return data.data as PlatformSubscription;
 }
 
-export async function getUserSubscriptions(userId: number): Promise<Sub2ApiSubscription[]> {
+export async function getUserSubscriptions(userId: number): Promise<PlatformSubscription[]> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/users/${userId}/subscriptions`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/users/${userId}/subscriptions`, {
     headers: await getHeaders(),
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
@@ -185,12 +185,12 @@ export async function getUserSubscriptions(userId: number): Promise<Sub2ApiSubsc
   }
 
   const data = await response.json();
-  return (data.data ?? []) as Sub2ApiSubscription[];
+  return (data.data ?? []) as PlatformSubscription[];
 }
 
 export async function extendSubscription(subscriptionId: number, days: number, idempotencyKey?: string): Promise<void> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/subscriptions/${subscriptionId}/extend`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/subscriptions/${subscriptionId}/extend`, {
     method: 'POST',
     headers: await getHeaders(idempotencyKey),
     body: JSON.stringify({ days }),
@@ -212,7 +212,7 @@ export async function subtractBalance(
   idempotencyKey: string,
 ): Promise<void> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/users/${userId}/balance`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/users/${userId}/balance`, {
     method: 'POST',
     headers: await getHeaders(idempotencyKey),
     body: JSON.stringify({
@@ -236,7 +236,7 @@ export async function searchUsers(
 ): Promise<{ id: number; email: string; username: string; notes?: string }[]> {
   const env = getEnv();
   const response = await fetch(
-    `${env.SUB2API_BASE_URL}/api/v1/admin/users?search=${encodeURIComponent(keyword)}&page=1&page_size=30`,
+    `${env.PLATFORM_BASE_URL}/api/v1/admin/users?search=${encodeURIComponent(keyword)}&page=1&page_size=30`,
     {
       headers: await getHeaders(),
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
@@ -258,7 +258,7 @@ export async function listSubscriptions(params?: {
   status?: string;
   page?: number;
   page_size?: number;
-}): Promise<{ subscriptions: Sub2ApiSubscription[]; total: number; page: number; page_size: number }> {
+}): Promise<{ subscriptions: PlatformSubscription[]; total: number; page: number; page_size: number }> {
   const env = getEnv();
   const qs = new URLSearchParams();
   if (params?.user_id != null) qs.set('user_id', String(params.user_id));
@@ -267,7 +267,7 @@ export async function listSubscriptions(params?: {
   if (params?.page != null) qs.set('page', String(params.page));
   if (params?.page_size != null) qs.set('page_size', String(params.page_size));
 
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/subscriptions?${qs}`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/subscriptions?${qs}`, {
     headers: await getHeaders(),
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
@@ -279,7 +279,7 @@ export async function listSubscriptions(params?: {
   const data = await response.json();
   const paginated = data.data ?? {};
   return {
-    subscriptions: (paginated.items ?? []) as Sub2ApiSubscription[],
+    subscriptions: (paginated.items ?? []) as PlatformSubscription[],
     total: paginated.total ?? 0,
     page: paginated.page ?? 1,
     page_size: paginated.page_size ?? 50,
@@ -288,7 +288,7 @@ export async function listSubscriptions(params?: {
 
 export async function addBalance(userId: number, amount: number, notes: string, idempotencyKey: string): Promise<void> {
   const env = getEnv();
-  const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/admin/users/${userId}/balance`, {
+  const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/admin/users/${userId}/balance`, {
     method: 'POST',
     headers: await getHeaders(idempotencyKey),
     body: JSON.stringify({

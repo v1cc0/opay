@@ -521,7 +521,7 @@ mod tests {
 
     async fn test_state() -> AppState {
         let db_path = std::env::temp_dir().join(format!(
-            "sub2apipay-admin-orders-route-{}.db",
+            "opay-admin-orders-route-{}.db",
             Uuid::new_v4()
         ));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();
@@ -534,8 +534,8 @@ mod tests {
             payment_providers: Vec::new(),
             admin_token: Some("test-admin-token".to_string()),
             system_config_cache_ttl_secs: 1,
-            sub2api_base_url: None,
-            sub2api_timeout_secs: 2,
+            platform_base_url: None,
+            platform_timeout_secs: 2,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -549,7 +549,7 @@ mod tests {
             config: Arc::clone(&config),
             db: db.clone(),
             system_config: system_config.clone(),
-            sub2api: None,
+            platform: None,
             order_service: OrderService::new(
                 Arc::clone(&config),
                 OrderRepository::new(db.clone()),

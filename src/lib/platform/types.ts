@@ -1,4 +1,4 @@
-export interface Sub2ApiUser {
+export interface PlatformUser {
   id: number;
   username: string;
   email: string;
@@ -7,7 +7,7 @@ export interface Sub2ApiUser {
   notes?: string;
 }
 
-export interface Sub2ApiRedeemCode {
+export interface PlatformRedeemCode {
   id: number;
   code: string;
   type: string;
@@ -17,7 +17,7 @@ export interface Sub2ApiRedeemCode {
   used_at: string;
 }
 
-export interface Sub2ApiResponse<T> {
+export interface PlatformResponse<T> {
   code: number;
   data?: T;
   message?: string;
@@ -25,7 +25,7 @@ export interface Sub2ApiResponse<T> {
 
 // ── 分组 ──
 
-export interface Sub2ApiGroup {
+export interface PlatformGroup {
   id: number;
   name: string;
   description: string;
@@ -45,7 +45,7 @@ export interface Sub2ApiGroup {
 
 // ── 订阅 ──
 
-export interface Sub2ApiSubscription {
+export interface PlatformSubscription {
   id: number;
   user_id: number;
   group_id: number;

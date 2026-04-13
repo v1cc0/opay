@@ -10,8 +10,8 @@ const optionalTrimmedString = z.preprocess((value) => {
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
 
-  SUB2API_BASE_URL: z.string().url(),
-  SUB2API_ADMIN_API_KEY: z.string().min(1),
+  PLATFORM_BASE_URL: z.string().url(),
+  PLATFORM_ADMIN_API_KEY: z.string().min(1),
 
   // ── 支付服务商（显式声明启用哪些服务商，逗号分隔：easypay, alipay, wxpay, stripe） ──
   PAYMENT_PROVIDERS: z

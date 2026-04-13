@@ -18,7 +18,7 @@ use crate::{
         status::is_refund_status,
     },
     payment_provider::{CreatePaymentResponse, RefundPaymentRequest, VerifiedPaymentNotification},
-    sub2api::Sub2ApiClient,
+    platform::PlatformClient,
     subscription_plan::{SubscriptionPlanRepository, compute_validity_days},
     system_config::SystemConfigService,
 };
@@ -34,7 +34,7 @@ pub struct OrderService {
     audit_logs: AuditLogRepository,
     subscription_plans: SubscriptionPlanRepository,
     system_config: SystemConfigService,
-    sub2api: Option<Sub2ApiClient>,
+    platform: Option<PlatformClient>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,7 +106,7 @@ impl OrderService {
         audit_logs: AuditLogRepository,
         subscription_plans: SubscriptionPlanRepository,
         system_config: SystemConfigService,
-        sub2api: Option<Sub2ApiClient>,
+        platform: Option<PlatformClient>,
     ) -> Self {
         Self {
             config,
@@ -114,7 +114,7 @@ impl OrderService {
             audit_logs,
             subscription_plans,
             system_config,
-            sub2api,
+            platform,
         }
     }
 
@@ -551,12 +551,12 @@ impl OrderService {
             bail!("refund amount exceeds recharge amount");
         }
 
-        let admin_api_key = self.sub2api_admin_api_key().await?;
-        let sub2api = self
-            .sub2api
+        let admin_api_key = self.platform_admin_api_key().await?;
+        let platform = self
+            .platform
             .as_ref()
-            .ok_or_else(|| anyhow!("SUB2API_BASE_URL is not configured"))?;
-        let user = sub2api.get_user(order.user_id, &admin_api_key).await?;
+            .ok_or_else(|| anyhow!("PLATFORM_BASE_URL is not configured"))?;
+        let user = platform.get_user(order.user_id, &admin_api_key).await?;
         let balance_cents = user
             .balance
             .filter(|value| value.is_finite() && *value >= 0.0)
@@ -647,11 +647,11 @@ impl OrderService {
             .or_else(|| order.refund_request_reason.clone())
             .unwrap_or_else(|| format!("opay refund order:{}", order.id));
 
-        let admin_api_key = self.sub2api_admin_api_key().await?;
-        let sub2api = self
-            .sub2api
+        let admin_api_key = self.platform_admin_api_key().await?;
+        let platform = self
+            .platform
             .as_ref()
-            .ok_or_else(|| anyhow!("SUB2API_BASE_URL is not configured"))?;
+            .ok_or_else(|| anyhow!("PLATFORM_BASE_URL is not configured"))?;
 
         let deduction = match self
             .prepare_deduction(
@@ -659,7 +659,7 @@ impl OrderService {
                 refund_amount_cents,
                 input.deduct_balance,
                 input.force,
-                sub2api,
+                platform,
                 &admin_api_key,
             )
             .await?
@@ -698,7 +698,7 @@ impl OrderService {
                 &deduction,
                 input.force,
                 input.deduct_balance,
-                sub2api,
+                platform,
                 &admin_api_key,
             )
             .await
@@ -777,7 +777,7 @@ impl OrderService {
         }
 
         let now_ts = now_timestamp();
-        let admin_api_key = match self.sub2api_admin_api_key().await {
+        let admin_api_key = match self.platform_admin_api_key().await {
             Ok(value) => value,
             Err(error) => match order.order_type.as_str() {
                 "subscription" => {
@@ -792,14 +792,14 @@ impl OrderService {
                 }
             },
         };
-        let sub2api = match self.sub2api.as_ref() {
+        let platform = match self.platform.as_ref() {
             Some(client) => client,
             None => match order.order_type.as_str() {
                 "subscription" => {
                     return self
                         .record_subscription_failure(
                             order_id,
-                            "SUB2API_BASE_URL is not configured".to_string(),
+                            "PLATFORM_BASE_URL is not configured".to_string(),
                             now_ts,
                         )
                         .await;
@@ -808,7 +808,7 @@ impl OrderService {
                     return self
                         .record_recharge_failure(
                             order_id,
-                            "SUB2API_BASE_URL is not configured".to_string(),
+                            "PLATFORM_BASE_URL is not configured".to_string(),
                             now_ts,
                         )
                         .await;
@@ -818,11 +818,11 @@ impl OrderService {
 
         match order.order_type.as_str() {
             "balance" => {
-                self.execute_balance_fulfillment(&order, sub2api, &admin_api_key, now_ts)
+                self.execute_balance_fulfillment(&order, platform, &admin_api_key, now_ts)
                     .await
             }
             "subscription" => {
-                self.execute_subscription_fulfillment(&order, sub2api, &admin_api_key, now_ts)
+                self.execute_subscription_fulfillment(&order, platform, &admin_api_key, now_ts)
                     .await
             }
             other => {
@@ -839,11 +839,11 @@ impl OrderService {
     async fn execute_balance_fulfillment(
         &self,
         order: &OrderRecord,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
         now_ts: i64,
     ) -> Result<bool> {
-        let recharge_result = sub2api
+        let recharge_result = platform
             .create_and_redeem_balance(
                 &order.recharge_code,
                 cents_to_amount(order.amount_cents),
@@ -893,7 +893,7 @@ impl OrderService {
     async fn execute_subscription_fulfillment(
         &self,
         order: &OrderRecord,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
         now_ts: i64,
     ) -> Result<bool> {
@@ -922,7 +922,7 @@ impl OrderService {
             }
         };
 
-        let group = match sub2api.get_group(group_id, admin_api_key).await {
+        let group = match platform.get_group(group_id, admin_api_key).await {
             Ok(Some(group)) if group.status == "active" => group,
             Ok(_) => {
                 return self
@@ -952,7 +952,7 @@ impl OrderService {
                 .await;
         }
 
-        let user_subscriptions = match sub2api
+        let user_subscriptions = match platform
             .get_user_subscriptions(order.user_id, admin_api_key)
             .await
         {
@@ -999,7 +999,7 @@ impl OrderService {
             }
         }
 
-        let redeem_result = sub2api
+        let redeem_result = platform
             .create_and_redeem_subscription(
                 &order.recharge_code,
                 cents_to_amount(order.amount_cents),
@@ -1058,7 +1058,7 @@ impl OrderService {
         refund_amount_cents: i64,
         deduct_balance: bool,
         force: bool,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
     ) -> Result<Option<DeductionPlan>> {
         if !deduct_balance {
@@ -1085,7 +1085,7 @@ impl OrderService {
                 }));
             };
 
-            let user_subscriptions = match sub2api
+            let user_subscriptions = match platform
                 .get_user_subscriptions(order.user_id, admin_api_key)
                 .await
             {
@@ -1123,7 +1123,7 @@ impl OrderService {
             }));
         }
 
-        let user = match sub2api.get_user(order.user_id, admin_api_key).await {
+        let user = match platform.get_user(order.user_id, admin_api_key).await {
             Ok(user) => user,
             Err(error) => {
                 if force {
@@ -1160,10 +1160,10 @@ impl OrderService {
         deduction: &DeductionPlan,
         force: bool,
         deduct_balance: bool,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
     ) -> Result<ProcessRefundResult> {
-        self.execute_deduction(order, deduction, sub2api, admin_api_key)
+        self.execute_deduction(order, deduction, platform, admin_api_key)
             .await?;
 
         let gateway_refund = if let Some(trade_no) = order.payment_trade_no.as_deref() {
@@ -1186,7 +1186,7 @@ impl OrderService {
                         .rollback_deduction(
                             order,
                             deduction,
-                            sub2api,
+                            platform,
                             admin_api_key,
                             &gateway_error,
                         )
@@ -1302,13 +1302,13 @@ impl OrderService {
         &self,
         order: &OrderRecord,
         deduction: &DeductionPlan,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
     ) -> Result<()> {
         let now_ts = now_timestamp();
         if let Some(subscription_id) = deduction.subscription_id {
             if deduction.subscription_days > 0 {
-                sub2api
+                platform
                     .extend_subscription(
                         subscription_id,
                         -deduction.subscription_days,
@@ -1321,7 +1321,7 @@ impl OrderService {
         }
 
         if deduction.balance_amount_cents > 0 {
-            sub2api
+            platform
                 .subtract_balance(
                     order.user_id,
                     cents_to_amount(deduction.balance_amount_cents),
@@ -1338,7 +1338,7 @@ impl OrderService {
         &self,
         order: &OrderRecord,
         deduction: &DeductionPlan,
-        sub2api: &Sub2ApiClient,
+        platform: &PlatformClient,
         admin_api_key: &str,
         gateway_error: &anyhow::Error,
     ) -> Result<bool> {
@@ -1349,7 +1349,7 @@ impl OrderService {
                 return Ok(true);
             }
 
-            match sub2api
+            match platform
                 .extend_subscription(
                     subscription_id,
                     deduction.subscription_days,
@@ -1384,7 +1384,7 @@ impl OrderService {
             return Ok(true);
         }
 
-        match sub2api
+        match platform
             .add_balance(
                 order.user_id,
                 cents_to_amount(deduction.balance_amount_cents),
@@ -1478,15 +1478,15 @@ impl OrderService {
         }
     }
 
-    async fn sub2api_admin_api_key(&self) -> Result<String> {
+    async fn platform_admin_api_key(&self) -> Result<String> {
         let value = self
             .system_config
-            .get("SUB2API_ADMIN_API_KEY")
+            .get("PLATFORM_ADMIN_API_KEY")
             .await?
             .unwrap_or_default();
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            bail!("SUB2API_ADMIN_API_KEY is not configured");
+            bail!("PLATFORM_ADMIN_API_KEY is not configured");
         }
         Ok(trimmed.to_string())
     }
@@ -1549,7 +1549,7 @@ mod tests {
         crypto,
         db::DatabaseHandle,
         provider_instances::{ProviderInstanceRepository, ProviderInstanceWrite},
-        sub2api::Sub2ApiClient,
+        platform::PlatformClient,
         subscription_plan::SubscriptionPlanRepository,
         system_config::{SystemConfigService, UpsertSystemConfig},
     };
@@ -1659,7 +1659,7 @@ mod tests {
     }
 
     #[derive(Debug, Clone, Default)]
-    struct MockSub2ApiFixture {
+    struct MockPlatformFixture {
         replies: Vec<MockRedeemReply>,
         groups: Vec<MockGroup>,
         users: Vec<MockUser>,
@@ -1669,7 +1669,7 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct MockSub2ApiState {
+    struct MockPlatformState {
         replies: Arc<Mutex<VecDeque<MockRedeemReply>>>,
         balance_replies: Arc<Mutex<VecDeque<MockApiReply>>>,
         extend_replies: Arc<Mutex<VecDeque<MockApiReply>>>,
@@ -1688,7 +1688,7 @@ mod tests {
     }
 
     async fn mock_create_and_redeem(
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
         headers: HeaderMap,
         Json(body): Json<MockRedeemRequest>,
     ) -> impl IntoResponse {
@@ -1730,7 +1730,7 @@ mod tests {
 
     async fn mock_get_group(
         Path(group_id): Path<i64>,
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
     ) -> impl IntoResponse {
         match state.groups.get(&group_id) {
             Some(group) => (StatusCode::OK, Json(json!({ "data": group }))).into_response(),
@@ -1740,7 +1740,7 @@ mod tests {
 
     async fn mock_get_user_subscriptions(
         Path(user_id): Path<i64>,
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
     ) -> impl IntoResponse {
         let items = state
             .user_subscriptions
@@ -1752,7 +1752,7 @@ mod tests {
 
     async fn mock_get_user(
         Path(user_id): Path<i64>,
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
     ) -> impl IntoResponse {
         match state.users.get(&user_id) {
             Some(user) => (StatusCode::OK, Json(json!({ "data": user }))).into_response(),
@@ -1762,7 +1762,7 @@ mod tests {
 
     async fn mock_balance_operation(
         Path(user_id): Path<i64>,
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
         headers: HeaderMap,
         Json(body): Json<MockBalanceRequest>,
     ) -> impl IntoResponse {
@@ -1797,7 +1797,7 @@ mod tests {
 
     async fn mock_extend_subscription(
         Path(subscription_id): Path<i64>,
-        State(state): State<MockSub2ApiState>,
+        State(state): State<MockPlatformState>,
         headers: HeaderMap,
         Json(body): Json<MockExtendRequest>,
     ) -> impl IntoResponse {
@@ -1830,10 +1830,10 @@ mod tests {
         }
     }
 
-    async fn start_mock_sub2api(
-        fixture: MockSub2ApiFixture,
-    ) -> (String, MockSub2ApiState, JoinHandle<()>) {
-        let state = MockSub2ApiState {
+    async fn start_mock_platform(
+        fixture: MockPlatformFixture,
+    ) -> (String, MockPlatformState, JoinHandle<()>) {
+        let state = MockPlatformState {
             replies: Arc::new(Mutex::new(VecDeque::from(fixture.replies))),
             balance_replies: Arc::new(Mutex::new(VecDeque::from(fixture.balance_replies))),
             extend_replies: Arc::new(Mutex::new(VecDeque::from(fixture.extend_replies))),
@@ -1938,7 +1938,7 @@ mod tests {
     }
 
     async fn test_service(
-        sub2api_base_url: Option<String>,
+        platform_base_url: Option<String>,
     ) -> (
         OrderService,
         AuditLogRepository,
@@ -1958,8 +1958,8 @@ mod tests {
             payment_providers: vec!["easypay".to_string()],
             admin_token: Some("dev-admin-token".to_string()),
             system_config_cache_ttl_secs: 30,
-            sub2api_base_url: sub2api_base_url.clone(),
-            sub2api_timeout_secs: 10,
+            platform_base_url: platform_base_url.clone(),
+            platform_timeout_secs: 10,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -1980,7 +1980,7 @@ mod tests {
                 audit.clone(),
                 subscription_plans,
                 system_config.clone(),
-                sub2api_base_url.map(|base_url| Sub2ApiClient::new(base_url, 10)),
+                platform_base_url.map(|base_url| PlatformClient::new(base_url, 10)),
             ),
             audit,
             orders,
@@ -1990,7 +1990,7 @@ mod tests {
     }
 
     async fn test_app_state(
-        sub2api_base_url: Option<String>,
+        platform_base_url: Option<String>,
     ) -> (
         AppState,
         AuditLogRepository,
@@ -2010,8 +2010,8 @@ mod tests {
             payment_providers: vec!["easypay".to_string(), "stripe".to_string()],
             admin_token: Some("dev-admin-token".to_string()),
             system_config_cache_ttl_secs: 30,
-            sub2api_base_url: sub2api_base_url.clone(),
-            sub2api_timeout_secs: 10,
+            platform_base_url: platform_base_url.clone(),
+            platform_timeout_secs: 10,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -2024,14 +2024,14 @@ mod tests {
         let audit = AuditLogRepository::new(db.clone());
         let subscription_plans = SubscriptionPlanRepository::new(db.clone());
         let system_config = SystemConfigService::new(db.clone(), Duration::from_secs(30));
-        let sub2api = sub2api_base_url.map(|base_url| Sub2ApiClient::new(base_url, 10));
+        let platform = platform_base_url.map(|base_url| PlatformClient::new(base_url, 10));
         let order_service = OrderService::new(
             Arc::clone(&config),
             orders.clone(),
             audit.clone(),
             subscription_plans,
             system_config.clone(),
-            sub2api.clone(),
+            platform.clone(),
         );
 
         (
@@ -2039,7 +2039,7 @@ mod tests {
                 config,
                 db: db.clone(),
                 system_config: system_config.clone(),
-                sub2api,
+                platform,
                 order_service,
             },
             audit,
@@ -2211,7 +2211,7 @@ mod tests {
 
     #[tokio::test]
     async fn verified_notification_completes_balance_fulfillment() {
-        let (base_url, mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, mock_state, handle) = start_mock_platform(MockPlatformFixture {
             replies: vec![MockRedeemReply::Success],
             ..Default::default()
         })
@@ -2220,7 +2220,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2288,7 +2288,7 @@ mod tests {
 
     #[tokio::test]
     async fn failed_fulfillment_retries_on_next_notification() {
-        let (base_url, mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, mock_state, handle) = start_mock_platform(MockPlatformFixture {
             replies: vec![
                 MockRedeemReply::Failure {
                     status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -2303,7 +2303,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2445,7 +2445,7 @@ mod tests {
 
     #[tokio::test]
     async fn retry_recharge_replays_failed_paid_order() {
-        let (base_url, mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, mock_state, handle) = start_mock_platform(MockPlatformFixture {
             replies: vec![MockRedeemReply::Success],
             ..Default::default()
         })
@@ -2454,7 +2454,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2526,7 +2526,7 @@ mod tests {
 
     #[tokio::test]
     async fn verified_notification_completes_subscription_fulfillment() {
-        let (base_url, mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, mock_state, handle) = start_mock_platform(MockPlatformFixture {
             replies: vec![MockRedeemReply::Success],
             groups: vec![MockGroup {
                 id: 5,
@@ -2541,7 +2541,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2604,7 +2604,7 @@ mod tests {
 
     #[tokio::test]
     async fn subscription_renewal_recomputes_month_validity_from_active_expiry() {
-        let (base_url, mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, mock_state, handle) = start_mock_platform(MockPlatformFixture {
             replies: vec![MockRedeemReply::Success],
             groups: vec![MockGroup {
                 id: 9,
@@ -2629,7 +2629,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2690,7 +2690,7 @@ mod tests {
 
     #[tokio::test]
     async fn request_refund_marks_balance_order_as_requested() {
-        let (base_url, _mock_state, handle) = start_mock_sub2api(MockSub2ApiFixture {
+        let (base_url, _mock_state, handle) = start_mock_platform(MockPlatformFixture {
             users: vec![MockUser {
                 id: 21,
                 status: "active".to_string(),
@@ -2706,7 +2706,7 @@ mod tests {
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2763,8 +2763,8 @@ mod tests {
 
     #[tokio::test]
     async fn process_refund_balance_partial_success_calls_gateway_and_balance_deduction() {
-        let (sub2api_base_url, mock_sub2api, sub2api_handle) =
-            start_mock_sub2api(MockSub2ApiFixture {
+        let (platform_base_url, mock_platform, platform_handle) =
+            start_mock_platform(MockPlatformFixture {
                 users: vec![MockUser {
                     id: 31,
                     status: "active".to_string(),
@@ -2778,11 +2778,11 @@ mod tests {
             .await;
         let (stripe_base_url, mock_stripe, stripe_handle) =
             start_mock_stripe(vec![MockStripeReply::Success]).await;
-        let (state, audit, orders, system_config, _) = test_app_state(Some(sub2api_base_url)).await;
+        let (state, audit, orders, system_config, _) = test_app_state(Some(platform_base_url)).await;
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2837,7 +2837,7 @@ mod tests {
         assert_eq!(saved.refund_amount_cents, Some(500));
         assert_eq!(saved.refund_reason.as_deref(), Some("manual partial"));
 
-        let balance_calls = mock_sub2api.captured_balance.lock().unwrap().clone();
+        let balance_calls = mock_platform.captured_balance.lock().unwrap().clone();
         assert_eq!(balance_calls.len(), 1);
         assert_eq!(balance_calls[0].user_id, 31);
         assert_eq!(balance_calls[0].body.operation, "subtract");
@@ -2869,14 +2869,14 @@ mod tests {
             1
         );
 
-        sub2api_handle.abort();
+        platform_handle.abort();
         stripe_handle.abort();
     }
 
     #[tokio::test]
     async fn process_refund_subscription_success_deducts_subscription_days() {
-        let (sub2api_base_url, mock_sub2api, sub2api_handle) =
-            start_mock_sub2api(MockSub2ApiFixture {
+        let (platform_base_url, mock_platform, platform_handle) =
+            start_mock_platform(MockPlatformFixture {
                 user_subscriptions: vec![(
                     41,
                     vec![MockSubscription {
@@ -2892,11 +2892,11 @@ mod tests {
             .await;
         let (stripe_base_url, mock_stripe, stripe_handle) =
             start_mock_stripe(vec![MockStripeReply::Success]).await;
-        let (state, audit, orders, system_config, _) = test_app_state(Some(sub2api_base_url)).await;
+        let (state, audit, orders, system_config, _) = test_app_state(Some(platform_base_url)).await;
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -2949,7 +2949,7 @@ mod tests {
         let saved = orders.get_by_id(&order.id).await.unwrap().unwrap();
         assert_eq!(saved.status, "REFUNDED");
 
-        let extend_calls = mock_sub2api.captured_extend.lock().unwrap().clone();
+        let extend_calls = mock_platform.captured_extend.lock().unwrap().clone();
         assert_eq!(extend_calls.len(), 1);
         assert_eq!(extend_calls[0].subscription_id, 401);
         assert_eq!(extend_calls[0].body.days, -30);
@@ -2969,14 +2969,14 @@ mod tests {
             1
         );
 
-        sub2api_handle.abort();
+        platform_handle.abort();
         stripe_handle.abort();
     }
 
     #[tokio::test]
     async fn process_refund_gateway_failure_rolls_back_balance_and_restores_status() {
-        let (sub2api_base_url, mock_sub2api, sub2api_handle) =
-            start_mock_sub2api(MockSub2ApiFixture {
+        let (platform_base_url, mock_platform, platform_handle) =
+            start_mock_platform(MockPlatformFixture {
                 users: vec![MockUser {
                     id: 51,
                     status: "active".to_string(),
@@ -2994,11 +2994,11 @@ mod tests {
                 body: "gateway down".to_string(),
             }])
             .await;
-        let (state, audit, orders, system_config, _) = test_app_state(Some(sub2api_base_url)).await;
+        let (state, audit, orders, system_config, _) = test_app_state(Some(platform_base_url)).await;
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -3050,7 +3050,7 @@ mod tests {
         let saved = orders.get_by_id(&order.id).await.unwrap().unwrap();
         assert_eq!(saved.status, "COMPLETED");
 
-        let balance_calls = mock_sub2api.captured_balance.lock().unwrap().clone();
+        let balance_calls = mock_platform.captured_balance.lock().unwrap().clone();
         assert_eq!(balance_calls.len(), 2);
         assert_eq!(balance_calls[0].body.operation, "subtract");
         assert_eq!(balance_calls[1].body.operation, "add");
@@ -3070,14 +3070,14 @@ mod tests {
             0
         );
 
-        sub2api_handle.abort();
+        platform_handle.abort();
         stripe_handle.abort();
     }
 
     #[tokio::test]
     async fn process_refund_rollback_failure_marks_order_refund_failed() {
-        let (sub2api_base_url, _mock_sub2api, sub2api_handle) =
-            start_mock_sub2api(MockSub2ApiFixture {
+        let (platform_base_url, _mock_platform, platform_handle) =
+            start_mock_platform(MockPlatformFixture {
                 users: vec![MockUser {
                     id: 61,
                     status: "active".to_string(),
@@ -3102,11 +3102,11 @@ mod tests {
                 body: "gateway still down".to_string(),
             }])
             .await;
-        let (state, audit, orders, system_config, _) = test_app_state(Some(sub2api_base_url)).await;
+        let (state, audit, orders, system_config, _) = test_app_state(Some(platform_base_url)).await;
 
         system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -3171,7 +3171,7 @@ mod tests {
             1
         );
 
-        sub2api_handle.abort();
+        platform_handle.abort();
         stripe_handle.abort();
     }
 }

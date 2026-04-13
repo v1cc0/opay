@@ -67,8 +67,8 @@ function getTexts(locale: Locale) {
         instanceSaveFailed: 'Failed to save instance',
         instanceDeleteFailed: 'Failed to delete instance',
         allChannels: 'All Channels',
-        sub2apiAdminApiKey: 'Platform Admin API Key',
-        sub2apiAdminApiKeyHint: 'Leave empty to use environment variable',
+        platformAdminApiKey: 'Platform Admin API Key',
+        platformAdminApiKeyHint: 'Leave empty to use environment variable',
         defaultDeductBalance: 'Default Deduct Balance',
         defaultDeductBalanceHint: 'When enabled, refund approval defaults to deducting balance/subscription',
       }
@@ -130,8 +130,8 @@ function getTexts(locale: Locale) {
         instanceSaveFailed: '保存实例失败',
         instanceDeleteFailed: '删除实例失败',
         allChannels: '全部渠道',
-        sub2apiAdminApiKey: 'Platform Admin API Key',
-        sub2apiAdminApiKeyHint: '留空则使用环境变量',
+        platformAdminApiKey: 'Platform Admin API Key',
+        platformAdminApiKeyHint: '留空则使用环境变量',
         defaultDeductBalance: '默认扣除余额/订阅',
         defaultDeductBalanceHint: '开启后，退款通过时默认扣除余额/订阅；关闭时默认不扣除',
       };
@@ -326,7 +326,7 @@ function PaymentConfigContent() {
         if (c.key === 'DAILY_RECHARGE_LIMIT') setRcDailyLimit(c.value);
         if (c.key === 'ORDER_TIMEOUT_MINUTES') setRcOrderTimeout(c.value);
         if (c.key === 'LOAD_BALANCE_STRATEGY') setRcLoadBalanceStrategy(c.value || 'round-robin');
-        if (c.key === 'SUB2API_ADMIN_API_KEY') setRcSub2apiKey(/\*{4,}/.test(c.value) ? '' : c.value);
+        if (c.key === 'PLATFORM_ADMIN_API_KEY') setRcSub2apiKey(/\*{4,}/.test(c.value) ? '' : c.value);
         if (c.key === 'DEFAULT_DEDUCT_BALANCE') setRcAutoRefundEnabled(c.value === 'true');
       }
       setRcOverrideEnv(hasOverride);
@@ -622,7 +622,7 @@ function PaymentConfigContent() {
                     label: '最多可存在支付中订单',
                   },
                   {
-                    key: 'SUB2API_ADMIN_API_KEY',
+                    key: 'PLATFORM_ADMIN_API_KEY',
                     value: rcSub2apiKey,
                     group: 'connection',
                     label: 'Platform Admin API Key',
@@ -874,17 +874,17 @@ function PaymentConfigContent() {
                 {/* Platform Admin API Key + Max pending orders */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                   <div>
-                    <label className={labelCls}>{t.sub2apiAdminApiKey}</label>
+                    <label className={labelCls}>{t.platformAdminApiKey}</label>
                     <input
                       type="password"
                       value={rcSub2apiKey}
                       onChange={(e) => setRcSub2apiKey(e.target.value)}
                       className={inputCls}
-                      placeholder={t.sub2apiAdminApiKeyHint}
+                      placeholder={t.platformAdminApiKeyHint}
                       autoComplete="off"
                     />
                     <p className={`mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {t.sub2apiAdminApiKeyHint}
+                      {t.platformAdminApiKeyHint}
                     </p>
                   </div>
                   <div>

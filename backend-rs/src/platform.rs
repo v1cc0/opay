@@ -5,13 +5,13 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
-pub struct Sub2ApiClient {
+pub struct PlatformClient {
     http: Client,
     base_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Sub2ApiUser {
+pub struct PlatformUser {
     pub id: i64,
     pub status: String,
     pub role: Option<String>,
@@ -22,7 +22,7 @@ pub struct Sub2ApiUser {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Sub2ApiSearchUser {
+pub struct PlatformSearchUser {
     pub id: i64,
     pub email: Option<String>,
     pub username: Option<String>,
@@ -30,7 +30,7 @@ pub struct Sub2ApiSearchUser {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Sub2ApiGroup {
+pub struct PlatformGroup {
     pub id: i64,
     #[serde(default)]
     pub name: String,
@@ -52,7 +52,7 @@ pub struct Sub2ApiGroup {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Sub2ApiSubscription {
+pub struct PlatformSubscription {
     pub id: i64,
     pub user_id: i64,
     pub group_id: i64,
@@ -79,7 +79,7 @@ pub struct Sub2ApiSubscription {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Sub2ApiRedeemCode {
+pub struct PlatformRedeemCode {
     pub id: Option<i64>,
     pub code: String,
     #[serde(rename = "type")]
@@ -102,7 +102,7 @@ struct PaginatedSubscriptionsEnvelope {
 #[derive(Debug, Deserialize)]
 struct PaginatedSubscriptionsData {
     #[serde(default)]
-    items: Vec<Sub2ApiSubscription>,
+    items: Vec<PlatformSubscription>,
     #[serde(default)]
     total: i64,
     #[serde(default = "default_page")]
@@ -119,7 +119,7 @@ struct PaginatedUsersEnvelope {
 #[derive(Debug, Deserialize)]
 struct PaginatedUsersData {
     #[serde(default)]
-    items: Vec<Sub2ApiSearchUser>,
+    items: Vec<PlatformSearchUser>,
 }
 
 #[derive(Debug, Serialize)]
@@ -138,7 +138,7 @@ struct CreateAndRedeemRequest<'a> {
 
 #[derive(Debug, Deserialize)]
 struct CreateAndRedeemResponse {
-    redeem_code: Option<Sub2ApiRedeemCode>,
+    redeem_code: Option<PlatformRedeemCode>,
 }
 
 #[derive(Debug, Serialize)]
@@ -154,7 +154,7 @@ struct ExtendSubscriptionRequest {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Sub2ApiRedeemKind {
+enum PlatformRedeemKind {
     Balance,
     Subscription { group_id: i64, validity_days: i64 },
 }
@@ -170,13 +170,13 @@ pub struct ListSubscriptionsParams {
 
 #[derive(Debug, Clone)]
 pub struct PaginatedSubscriptions {
-    pub subscriptions: Vec<Sub2ApiSubscription>,
+    pub subscriptions: Vec<PlatformSubscription>,
     pub total: i64,
     pub page: i64,
     pub page_size: i64,
 }
 
-impl Sub2ApiClient {
+impl PlatformClient {
     pub fn new(base_url: String, timeout_secs: u64) -> Self {
         let http = Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
@@ -188,14 +188,14 @@ impl Sub2ApiClient {
         Self { http, base_url }
     }
 
-    pub async fn get_current_user_by_token(&self, token: &str) -> Result<Sub2ApiUser> {
+    pub async fn get_current_user_by_token(&self, token: &str) -> Result<PlatformUser> {
         let response = self
             .http
             .get(format!("{}/api/v1/auth/me", self.base_url))
             .bearer_auth(token)
             .send()
             .await
-            .context("failed to call Sub2API auth/me")?;
+            .context("failed to call Platform auth/me")?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -205,21 +205,21 @@ impl Sub2ApiClient {
         }
 
         let data = response
-            .json::<DataEnvelope<Sub2ApiUser>>()
+            .json::<DataEnvelope<PlatformUser>>()
             .await
-            .context("failed to decode Sub2API auth/me response")?;
+            .context("failed to decode Platform auth/me response")?;
 
         Ok(data.data)
     }
 
-    pub async fn get_user(&self, user_id: i64, admin_api_key: &str) -> Result<Sub2ApiUser> {
+    pub async fn get_user(&self, user_id: i64, admin_api_key: &str) -> Result<PlatformUser> {
         let response = self
             .http
             .get(format!("{}/api/v1/admin/users/{}", self.base_url, user_id))
             .header("x-api-key", admin_api_key)
             .send()
             .await
-            .with_context(|| format!("failed to call Sub2API admin/users/{}", user_id))?;
+            .with_context(|| format!("failed to call Platform admin/users/{}", user_id))?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Err(anyhow!("USER_NOT_FOUND"));
@@ -233,9 +233,9 @@ impl Sub2ApiClient {
         }
 
         let data = response
-            .json::<DataEnvelope<Sub2ApiUser>>()
+            .json::<DataEnvelope<PlatformUser>>()
             .await
-            .with_context(|| format!("failed to decode Sub2API admin user {}", user_id))?;
+            .with_context(|| format!("failed to decode Platform admin user {}", user_id))?;
 
         Ok(data.data)
     }
@@ -244,7 +244,7 @@ impl Sub2ApiClient {
         &self,
         group_id: i64,
         admin_api_key: &str,
-    ) -> Result<Option<Sub2ApiGroup>> {
+    ) -> Result<Option<PlatformGroup>> {
         let response = self
             .http
             .get(format!(
@@ -254,7 +254,7 @@ impl Sub2ApiClient {
             .header("x-api-key", admin_api_key)
             .send()
             .await
-            .with_context(|| format!("failed to call Sub2API admin/groups/{}", group_id))?;
+            .with_context(|| format!("failed to call Platform admin/groups/{}", group_id))?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
@@ -269,21 +269,21 @@ impl Sub2ApiClient {
         }
 
         let data = response
-            .json::<DataEnvelope<Sub2ApiGroup>>()
+            .json::<DataEnvelope<PlatformGroup>>()
             .await
-            .with_context(|| format!("failed to decode Sub2API group {}", group_id))?;
+            .with_context(|| format!("failed to decode Platform group {}", group_id))?;
 
         Ok(Some(data.data))
     }
 
-    pub async fn get_all_groups(&self, admin_api_key: &str) -> Result<Vec<Sub2ApiGroup>> {
+    pub async fn get_all_groups(&self, admin_api_key: &str) -> Result<Vec<PlatformGroup>> {
         let response = self
             .http
             .get(format!("{}/api/v1/admin/groups/all", self.base_url))
             .header("x-api-key", admin_api_key)
             .send()
             .await
-            .context("failed to call Sub2API admin/groups/all")?;
+            .context("failed to call Platform admin/groups/all")?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -293,9 +293,9 @@ impl Sub2ApiClient {
         }
 
         let data = response
-            .json::<DataEnvelope<Vec<Sub2ApiGroup>>>()
+            .json::<DataEnvelope<Vec<PlatformGroup>>>()
             .await
-            .context("failed to decode Sub2API groups response")?;
+            .context("failed to decode Platform groups response")?;
 
         Ok(data.data)
     }
@@ -304,7 +304,7 @@ impl Sub2ApiClient {
         &self,
         user_id: i64,
         admin_api_key: &str,
-    ) -> Result<Vec<Sub2ApiSubscription>> {
+    ) -> Result<Vec<PlatformSubscription>> {
         let response = self
             .http
             .get(format!(
@@ -315,7 +315,7 @@ impl Sub2ApiClient {
             .send()
             .await
             .with_context(|| {
-                format!("failed to call Sub2API admin/users/{user_id}/subscriptions")
+                format!("failed to call Platform admin/users/{user_id}/subscriptions")
             })?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -330,7 +330,7 @@ impl Sub2ApiClient {
         }
 
         let data = response
-            .json::<DataEnvelope<Vec<Sub2ApiSubscription>>>()
+            .json::<DataEnvelope<Vec<PlatformSubscription>>>()
             .await
             .with_context(|| format!("failed to decode subscriptions for user {}", user_id))?;
 
@@ -341,7 +341,7 @@ impl Sub2ApiClient {
         &self,
         keyword: &str,
         admin_api_key: &str,
-    ) -> Result<Vec<Sub2ApiSearchUser>> {
+    ) -> Result<Vec<PlatformSearchUser>> {
         let trimmed = keyword.trim();
         if trimmed.is_empty() {
             return Ok(Vec::new());
@@ -357,7 +357,7 @@ impl Sub2ApiClient {
             .header("x-api-key", admin_api_key)
             .send()
             .await
-            .context("failed to call Sub2API admin user search")?;
+            .context("failed to call Platform admin user search")?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -369,7 +369,7 @@ impl Sub2ApiClient {
         let data = response
             .json::<PaginatedUsersEnvelope>()
             .await
-            .context("failed to decode Sub2API user search response")?;
+            .context("failed to decode Platform user search response")?;
 
         Ok(data.data.items)
     }
@@ -396,7 +396,7 @@ impl Sub2ApiClient {
             .header("x-api-key", admin_api_key)
             .send()
             .await
-            .context("failed to call Sub2API admin/subscriptions")?;
+            .context("failed to call Platform admin/subscriptions")?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -408,7 +408,7 @@ impl Sub2ApiClient {
         let data = response
             .json::<PaginatedSubscriptionsEnvelope>()
             .await
-            .context("failed to decode Sub2API subscriptions list response")?;
+            .context("failed to decode Platform subscriptions list response")?;
 
         Ok(PaginatedSubscriptions {
             subscriptions: data.data.items,
@@ -481,7 +481,7 @@ impl Sub2ApiClient {
             .send()
             .await
             .with_context(|| {
-                format!("failed to call Sub2API balance operation {operation} for user {user_id}")
+                format!("failed to call Platform balance operation {operation} for user {user_id}")
             })?;
 
         if !response.status().is_success() {
@@ -517,7 +517,7 @@ impl Sub2ApiClient {
             .await
             .with_context(|| {
                 format!(
-                    "failed to call Sub2API extend subscription {}",
+                    "failed to call Platform extend subscription {}",
                     subscription_id
                 )
             })?;
@@ -541,14 +541,14 @@ impl Sub2ApiClient {
         user_id: i64,
         notes: &str,
         admin_api_key: &str,
-    ) -> Result<Sub2ApiRedeemCode> {
+    ) -> Result<PlatformRedeemCode> {
         self.create_and_redeem(
             code,
             value,
             user_id,
             notes,
             admin_api_key,
-            Sub2ApiRedeemKind::Balance,
+            PlatformRedeemKind::Balance,
         )
         .await
     }
@@ -562,14 +562,14 @@ impl Sub2ApiClient {
         group_id: i64,
         validity_days: i64,
         admin_api_key: &str,
-    ) -> Result<Sub2ApiRedeemCode> {
+    ) -> Result<PlatformRedeemCode> {
         self.create_and_redeem(
             code,
             value,
             user_id,
             notes,
             admin_api_key,
-            Sub2ApiRedeemKind::Subscription {
+            PlatformRedeemKind::Subscription {
                 group_id,
                 validity_days,
             },
@@ -584,11 +584,11 @@ impl Sub2ApiClient {
         user_id: i64,
         notes: &str,
         admin_api_key: &str,
-        redeem_kind: Sub2ApiRedeemKind,
-    ) -> Result<Sub2ApiRedeemCode> {
+        redeem_kind: PlatformRedeemKind,
+    ) -> Result<PlatformRedeemCode> {
         let (redeem_type, group_id, validity_days) = match redeem_kind {
-            Sub2ApiRedeemKind::Balance => ("balance", None, None),
-            Sub2ApiRedeemKind::Subscription {
+            PlatformRedeemKind::Balance => ("balance", None, None),
+            PlatformRedeemKind::Subscription {
                 group_id,
                 validity_days,
             } => ("subscription", Some(group_id), Some(validity_days)),
@@ -613,7 +613,7 @@ impl Sub2ApiClient {
             })
             .send()
             .await
-            .context("failed to call Sub2API create-and-redeem")?;
+            .context("failed to call Platform create-and-redeem")?;
 
         if !response.status().is_success() {
             let status = response.status().as_u16();
@@ -624,10 +624,10 @@ impl Sub2ApiClient {
         let data = response
             .json::<CreateAndRedeemResponse>()
             .await
-            .context("failed to decode Sub2API create-and-redeem response")?;
+            .context("failed to decode Platform create-and-redeem response")?;
 
         data.redeem_code
-            .ok_or_else(|| anyhow!("Sub2API create-and-redeem response missing redeem_code"))
+            .ok_or_else(|| anyhow!("Platform create-and-redeem response missing redeem_code"))
     }
 }
 

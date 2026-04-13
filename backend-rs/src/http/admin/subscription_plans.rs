@@ -12,7 +12,7 @@ use crate::{
     admin_auth::verify_admin_values,
     error::{AppError, AppResult},
     http::common::timestamp_to_rfc3339,
-    sub2api::Sub2ApiGroup,
+    platform::PlatformGroup,
     subscription_plan::{
         SubscriptionPlanRecord, SubscriptionPlanRepository, SubscriptionPlanWrite,
     },
@@ -90,12 +90,12 @@ async fn list_plans(
 
     let repo = SubscriptionPlanRepository::new(state.db.clone());
     let plans = repo.list_all().await.map_err(AppError::internal)?;
-    let sub2api = state.sub2api.as_ref();
-    let admin_api_key = sub2api_admin_api_key(&state).await.ok();
+    let platform = state.platform.as_ref();
+    let admin_api_key = platform_admin_api_key(&state).await.ok();
 
     let mut items = Vec::new();
     for plan in plans {
-        let group = match (plan.group_id, sub2api, admin_api_key.as_deref()) {
+        let group = match (plan.group_id, platform, admin_api_key.as_deref()) {
             (Some(group_id), Some(client), Some(key)) => {
                 client.get_group(group_id, key).await.ok().flatten()
             }
@@ -129,8 +129,8 @@ async fn get_plan(
         .ok_or_else(|| AppError::not_found("订阅套餐不存在"))?;
     let group = match (
         plan.group_id,
-        state.sub2api.as_ref(),
-        sub2api_admin_api_key(&state).await.ok(),
+        state.platform.as_ref(),
+        platform_admin_api_key(&state).await.ok(),
     ) {
         (Some(group_id), Some(client), Some(key)) => {
             client.get_group(group_id, &key).await.ok().flatten()
@@ -192,12 +192,12 @@ async fn update_plan(
         .ok_or_else(|| AppError::not_found("订阅套餐不存在"))?;
 
     let final_group_id = if body.get("group_id").is_some() {
-        optional_positive_i64(body.get("group_id"), "必须关联一个 Sub2API 分组")?
+        optional_positive_i64(body.get("group_id"), "必须关联一个 Platform 分组")?
     } else {
         existing.group_id
     };
     let Some(group_id) = final_group_id else {
-        return Err(AppError::bad_request("必须关联一个 Sub2API 分组"));
+        return Err(AppError::bad_request("必须关联一个 Platform 分组"));
     };
 
     let group = match ensure_group_exists(&state, group_id).await {
@@ -218,7 +218,7 @@ async fn update_plan(
             };
             let _ = repo.replace(&id, rebound).await;
             return Err(AppError::conflict(
-                "该分组在 Sub2API 中已被删除，已自动解绑，请重新选择分组",
+                "该分组在 Platform 中已被删除，已自动解绑，请重新选择分组",
             ));
         }
     };
@@ -272,32 +272,32 @@ async fn delete_plan(
     Ok(Json(DeleteSuccessResponse { success: true }))
 }
 
-async fn ensure_group_exists(state: &AppState, group_id: i64) -> AppResult<Sub2ApiGroup> {
-    let sub2api = state
-        .sub2api
+async fn ensure_group_exists(state: &AppState, group_id: i64) -> AppResult<PlatformGroup> {
+    let platform = state
+        .platform
         .as_ref()
         .ok_or_else(|| AppError::public_internal("获取分组信息失败"))?;
-    let admin_api_key = sub2api_admin_api_key(state).await?;
-    sub2api
+    let admin_api_key = platform_admin_api_key(state).await?;
+    platform
         .get_group(group_id, &admin_api_key)
         .await
         .map_err(AppError::internal)?
         .ok_or_else(|| {
-            AppError::conflict("该分组在 Sub2API 中已被删除，已自动解绑，请重新选择分组")
+            AppError::conflict("该分组在 Platform 中已被删除，已自动解绑，请重新选择分组")
         })
 }
 
-async fn sub2api_admin_api_key(state: &AppState) -> AppResult<String> {
+async fn platform_admin_api_key(state: &AppState) -> AppResult<String> {
     let value = state
         .system_config
-        .get("SUB2API_ADMIN_API_KEY")
+        .get("PLATFORM_ADMIN_API_KEY")
         .await
         .map_err(AppError::internal)?
         .unwrap_or_default();
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Err(AppError::public_internal(
-            "Sub2API admin api key is not configured",
+            "Platform admin api key is not configured",
         ));
     }
     Ok(trimmed.to_string())
@@ -410,7 +410,7 @@ fn merge_update_body(
     })
 }
 
-fn to_admin_plan_view(plan: SubscriptionPlanRecord, group: Option<Sub2ApiGroup>) -> AdminPlanView {
+fn to_admin_plan_view(plan: SubscriptionPlanRecord, group: Option<PlatformGroup>) -> AdminPlanView {
     let (
         group_exists,
         group_name,
@@ -615,13 +615,13 @@ mod tests {
         config::AppConfig,
         db::DatabaseHandle,
         order::{audit::AuditLogRepository, repository::OrderRepository, service::OrderService},
-        sub2api::Sub2ApiClient,
+        platform::PlatformClient,
         system_config::SystemConfigService,
         system_config::UpsertSystemConfig,
     };
 
-    fn mock_group(id: i64, name: &str) -> Sub2ApiGroup {
-        Sub2ApiGroup {
+    fn mock_group(id: i64, name: &str) -> PlatformGroup {
+        PlatformGroup {
             id,
             name: name.to_string(),
             status: "active".to_string(),
@@ -643,9 +643,9 @@ mod tests {
     #[derive(Clone)]
     struct MockGroupState;
 
-    async fn test_state(sub2api_base_url: Option<String>) -> AppState {
+    async fn test_state(platform_base_url: Option<String>) -> AppState {
         let db_path =
-            std::env::temp_dir().join(format!("sub2apipay-admin-plan-route-{}.db", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-admin-plan-route-{}.db", Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();
         db.run_migrations().await.unwrap();
 
@@ -656,8 +656,8 @@ mod tests {
             payment_providers: Vec::new(),
             admin_token: Some("test-admin-token".to_string()),
             system_config_cache_ttl_secs: 1,
-            sub2api_base_url: sub2api_base_url.clone(),
-            sub2api_timeout_secs: 2,
+            platform_base_url: platform_base_url.clone(),
+            platform_timeout_secs: 2,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -667,20 +667,20 @@ mod tests {
         });
 
         let system_config = SystemConfigService::new(db.clone(), Duration::from_secs(1));
-        let sub2api = sub2api_base_url.map(|base_url| Sub2ApiClient::new(base_url, 2));
+        let platform = platform_base_url.map(|base_url| PlatformClient::new(base_url, 2));
 
         AppState {
             config: Arc::clone(&config),
             db: db.clone(),
             system_config: system_config.clone(),
-            sub2api: sub2api.clone(),
+            platform: platform.clone(),
             order_service: OrderService::new(
                 Arc::clone(&config),
                 OrderRepository::new(db.clone()),
                 AuditLogRepository::new(db.clone()),
                 SubscriptionPlanRepository::new(db.clone()),
                 system_config,
-                sub2api,
+                platform,
             ),
         }
     }
@@ -691,7 +691,7 @@ mod tests {
         headers
     }
 
-    async fn start_mock_sub2api() -> (String, JoinHandle<()>) {
+    async fn start_mock_platform() -> (String, JoinHandle<()>) {
         async fn group(
             Path(group_id): Path<i64>,
             State(_): State<MockGroupState>,
@@ -721,12 +721,12 @@ mod tests {
 
     #[tokio::test]
     async fn admin_subscription_plan_crud_roundtrip() {
-        let (base_url, handle) = start_mock_sub2api().await;
+        let (base_url, handle) = start_mock_platform().await;
         let state = test_state(Some(base_url)).await;
         state
             .system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,

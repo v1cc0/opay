@@ -217,11 +217,11 @@ async fn create_order(
         )));
     }
 
-    let sub2api = state
-        .sub2api
+    let platform = state
+        .platform
         .as_ref()
-        .ok_or_else(|| AppError::internal(anyhow::anyhow!("SUB2API_BASE_URL is not configured")))?;
-    let token_user = sub2api
+        .ok_or_else(|| AppError::internal(anyhow::anyhow!("PLATFORM_BASE_URL is not configured")))?;
+    let token_user = platform
         .get_current_user_by_token(token)
         .await
         .map_err(|error| {
@@ -271,7 +271,7 @@ async fn create_order(
     }
 
     let subscription_context = if order_type == "subscription" {
-        Some(resolve_subscription_order(&state, locale, body.plan_id.as_deref(), sub2api).await?)
+        Some(resolve_subscription_order(&state, locale, body.plan_id.as_deref(), platform).await?)
     } else {
         None
     };
@@ -415,10 +415,10 @@ async fn list_my_orders(
         20
     };
 
-    let sub2api = state.sub2api.as_ref().ok_or_else(|| {
+    let platform = state.platform.as_ref().ok_or_else(|| {
         AppError::public_internal(message(locale, "获取订单失败", "Failed to load orders"))
     })?;
-    let token_user = sub2api
+    let token_user = platform
         .get_current_user_by_token(token)
         .await
         .map_err(|error| {
@@ -580,11 +580,11 @@ async fn cancel_order(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| AppError::bad_request("缺少 token 参数"))?;
 
-    let sub2api = state
-        .sub2api
+    let platform = state
+        .platform
         .as_ref()
         .ok_or_else(|| AppError::public_internal("取消订单失败"))?;
-    let token_user = sub2api
+    let token_user = platform
         .get_current_user_by_token(token)
         .await
         .map_err(|error| {
@@ -654,10 +654,10 @@ async fn request_refund(
         }
     };
 
-    let sub2api = state.sub2api.as_ref().ok_or_else(|| {
+    let platform = state.platform.as_ref().ok_or_else(|| {
         AppError::public_internal(message(locale, "退款申请失败", "Refund request failed"))
     })?;
-    let token_user = sub2api
+    let token_user = platform
         .get_current_user_by_token(token)
         .await
         .map_err(|error| {
@@ -687,7 +687,7 @@ async fn resolve_subscription_order(
     state: &AppState,
     locale: &str,
     plan_id: Option<&str>,
-    sub2api: &crate::sub2api::Sub2ApiClient,
+    platform: &crate::platform::PlatformClient,
 ) -> AppResult<SubscriptionOrderContext> {
     let plan_id = plan_id
         .map(str::trim)
@@ -731,18 +731,18 @@ async fn resolve_subscription_order(
 
     let admin_api_key = state
         .system_config
-        .get("SUB2API_ADMIN_API_KEY")
+        .get("PLATFORM_ADMIN_API_KEY")
         .await
         .map_err(AppError::internal)?
         .unwrap_or_default();
     let admin_api_key = admin_api_key.trim().to_string();
     if admin_api_key.is_empty() {
         return Err(AppError::internal(anyhow::anyhow!(
-            "SUB2API_ADMIN_API_KEY is not configured"
+            "PLATFORM_ADMIN_API_KEY is not configured"
         )));
     }
 
-    let group = sub2api
+    let group = platform
         .get_group(group_id, &admin_api_key)
         .await
         .map_err(AppError::internal)?
@@ -974,7 +974,7 @@ mod tests {
             service::OrderService,
         },
         provider_instances::{ProviderInstanceRepository, ProviderInstanceWrite},
-        sub2api::Sub2ApiClient,
+        platform::PlatformClient,
         subscription_plan::SubscriptionPlanRepository,
         system_config::{SystemConfigService, UpsertSystemConfig},
     };
@@ -985,12 +985,12 @@ mod tests {
         balance: f64,
     }
 
-    async fn test_state(sub2api_base_url: Option<String>) -> AppState {
-        test_state_with_payment_providers(sub2api_base_url, Vec::new()).await
+    async fn test_state(platform_base_url: Option<String>) -> AppState {
+        test_state_with_payment_providers(platform_base_url, Vec::new()).await
     }
 
     async fn test_state_with_payment_providers(
-        sub2api_base_url: Option<String>,
+        platform_base_url: Option<String>,
         payment_providers: Vec<String>,
     ) -> AppState {
         let db_path = std::env::temp_dir().join(format!(
@@ -1007,8 +1007,8 @@ mod tests {
             payment_providers,
             admin_token: Some("test-admin-token".to_string()),
             system_config_cache_ttl_secs: 1,
-            sub2api_base_url: sub2api_base_url.clone(),
-            sub2api_timeout_secs: 2,
+            platform_base_url: platform_base_url.clone(),
+            platform_timeout_secs: 2,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -1018,25 +1018,25 @@ mod tests {
         });
 
         let system_config = SystemConfigService::new(db.clone(), Duration::from_secs(1));
-        let sub2api = sub2api_base_url.map(|base_url| Sub2ApiClient::new(base_url, 2));
+        let platform = platform_base_url.map(|base_url| PlatformClient::new(base_url, 2));
 
         AppState {
             config: Arc::clone(&config),
             db: db.clone(),
             system_config: system_config.clone(),
-            sub2api: sub2api.clone(),
+            platform: platform.clone(),
             order_service: OrderService::new(
                 Arc::clone(&config),
                 OrderRepository::new(db.clone()),
                 AuditLogRepository::new(db.clone()),
                 SubscriptionPlanRepository::new(db.clone()),
                 system_config,
-                sub2api,
+                platform,
             ),
         }
     }
 
-    async fn start_mock_sub2api(user: MockUser) -> (String, JoinHandle<()>) {
+    async fn start_mock_platform(user: MockUser) -> (String, JoinHandle<()>) {
         async fn auth_me(State(user): State<MockUser>) -> Json<serde_json::Value> {
             Json(json!({
                 "data": {
@@ -1081,7 +1081,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_order_rejects_direct_payment_type_in_rust_mvp() {
-        let (base_url, handle) = start_mock_sub2api(MockUser {
+        let (base_url, handle) = start_mock_platform(MockUser {
             id: 3,
             balance: 50.0,
         })
@@ -1122,7 +1122,7 @@ mod tests {
 
     #[tokio::test]
     async fn refund_request_marks_order_as_requested() {
-        let (base_url, handle) = start_mock_sub2api(MockUser {
+        let (base_url, handle) = start_mock_platform(MockUser {
             id: 21,
             balance: 99.0,
         })
@@ -1133,7 +1133,7 @@ mod tests {
         state
             .system_config
             .set_many(&[UpsertSystemConfig {
-                key: "SUB2API_ADMIN_API_KEY".to_string(),
+                key: "PLATFORM_ADMIN_API_KEY".to_string(),
                 value: "test-admin-key".to_string(),
                 group: Some("payment".to_string()),
                 label: None,
@@ -1190,7 +1190,7 @@ mod tests {
 
     #[tokio::test]
     async fn my_orders_returns_refund_capability_and_summary() {
-        let (base_url, handle) = start_mock_sub2api(MockUser {
+        let (base_url, handle) = start_mock_platform(MockUser {
             id: 1,
             balance: 100.0,
         })
@@ -1326,7 +1326,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_order_route_cancels_pending_user_order() {
-        let (base_url, handle) = start_mock_sub2api(MockUser {
+        let (base_url, handle) = start_mock_platform(MockUser {
             id: 21,
             balance: 99.0,
         })

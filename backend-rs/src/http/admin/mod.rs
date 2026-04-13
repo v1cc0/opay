@@ -5,7 +5,7 @@ pub mod env_defaults;
 pub mod orders;
 pub mod provider_instances;
 pub mod refund;
-pub mod sub2api;
+pub mod platform;
 pub mod subscription_plans;
 pub mod subscriptions;
 pub mod user_balance;
@@ -24,7 +24,7 @@ pub fn router() -> Router<AppState> {
         .merge(provider_instances::router())
         .merge(refund::router())
         .merge(subscription_plans::router())
-        .merge(sub2api::router())
+        .merge(platform::router())
         .merge(subscriptions::router())
         .merge(user_balance::router())
 }

@@ -37,7 +37,7 @@ pnpm --dir frontend-cf cf:dev
 ## Important vars
 
 - `API_BASE_URL`: Rust backend origin
-- `SUB2API_BASE_URL`: optional, used to build `frame-ancestors`
+- `PLATFORM_BASE_URL`: optional, used to build `frame-ancestors`
 - `IFRAME_ALLOW_ORIGINS`: optional extra allowed iframe origins, comma-separated
 
 ## Notes

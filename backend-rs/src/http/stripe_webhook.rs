@@ -204,8 +204,8 @@ mod tests {
             payment_providers: vec!["stripe".to_string()],
             admin_token: Some("dev-admin-token".to_string()),
             system_config_cache_ttl_secs: 30,
-            sub2api_base_url: None,
-            sub2api_timeout_secs: 10,
+            platform_base_url: None,
+            platform_timeout_secs: 10,
             min_recharge_amount: 1.0,
             max_recharge_amount: 1000.0,
             max_daily_recharge_amount: 10000.0,
@@ -228,7 +228,7 @@ mod tests {
             config,
             db,
             system_config,
-            sub2api: None,
+            platform: None,
             order_service,
         }
     }

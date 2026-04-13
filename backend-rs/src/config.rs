@@ -17,8 +17,8 @@ pub struct AppConfig {
     pub payment_providers: Vec<String>,
     pub admin_token: Option<String>,
     pub system_config_cache_ttl_secs: u64,
-    pub sub2api_base_url: Option<String>,
-    pub sub2api_timeout_secs: u64,
+    pub platform_base_url: Option<String>,
+    pub platform_timeout_secs: u64,
     pub min_recharge_amount: f64,
     pub max_recharge_amount: f64,
     pub max_daily_recharge_amount: f64,
@@ -65,8 +65,8 @@ impl RuntimeConfig {
             app.system_config_cache_ttl_secs.to_string(),
         );
         legacy_env.insert(
-            "SUB2API_TIMEOUT_SECS".to_string(),
-            app.sub2api_timeout_secs.to_string(),
+            "PLATFORM_TIMEOUT_SECS".to_string(),
+            app.platform_timeout_secs.to_string(),
         );
         legacy_env.insert(
             "MIN_RECHARGE_AMOUNT".to_string(),
@@ -84,8 +84,8 @@ impl RuntimeConfig {
         insert_optional_env(&mut legacy_env, "ADMIN_TOKEN", app.admin_token.clone());
         insert_optional_env(
             &mut legacy_env,
-            "SUB2API_BASE_URL",
-            app.sub2api_base_url.clone(),
+            "PLATFORM_BASE_URL",
+            app.platform_base_url.clone(),
         );
         insert_optional_env(
             &mut legacy_env,
@@ -181,18 +181,18 @@ impl AppConfig {
             })
             .unwrap_or(30);
 
-        let sub2api_base_url = app
-            .sub2api_base_url
+        let platform_base_url = app
+            .platform_base_url
             .clone()
-            .or_else(|| legacy_env.get("SUB2API_BASE_URL").cloned())
+            .or_else(|| legacy_env.get("PLATFORM_BASE_URL").cloned())
             .and_then(normalize_optional_string)
             .map(|value| value.trim_end_matches('/').to_string());
 
-        let sub2api_timeout_secs = app
-            .sub2api_timeout_secs
+        let platform_timeout_secs = app
+            .platform_timeout_secs
             .or_else(|| {
                 legacy_env
-                    .get("SUB2API_TIMEOUT_SECS")
+                    .get("PLATFORM_TIMEOUT_SECS")
                     .and_then(|value| value.parse::<u64>().ok())
             })
             .unwrap_or(10);
@@ -249,8 +249,8 @@ impl AppConfig {
             payment_providers,
             admin_token,
             system_config_cache_ttl_secs,
-            sub2api_base_url,
-            sub2api_timeout_secs,
+            platform_base_url,
+            platform_timeout_secs,
             min_recharge_amount,
             max_recharge_amount,
             max_daily_recharge_amount,
@@ -287,8 +287,8 @@ struct FileAppConfig {
     payment_providers: Option<Vec<String>>,
     admin_token: Option<String>,
     system_config_cache_ttl_secs: Option<u64>,
-    sub2api_base_url: Option<String>,
-    sub2api_timeout_secs: Option<u64>,
+    platform_base_url: Option<String>,
+    platform_timeout_secs: Option<u64>,
     min_recharge_amount: Option<f64>,
     max_recharge_amount: Option<f64>,
     max_daily_recharge_amount: Option<f64>,
@@ -461,8 +461,8 @@ db_path = "data/runtime.db"
 payment_providers = ["easypay", "stripe"]
 admin_token = "secret-token"
 system_config_cache_ttl_secs = 99
-sub2api_base_url = "https://sub2api.example.com/"
-sub2api_timeout_secs = 30
+platform_base_url = "https://platform.example.com/"
+platform_timeout_secs = 30
 min_recharge_amount = 5.5
 max_recharge_amount = 3000
 max_daily_recharge_amount = 20000
@@ -489,10 +489,10 @@ ORDER_TIMEOUT_MINUTES = 7
         assert_eq!(app.admin_token.as_deref(), Some("secret-token"));
         assert_eq!(app.system_config_cache_ttl_secs, 99);
         assert_eq!(
-            app.sub2api_base_url.as_deref(),
-            Some("https://sub2api.example.com")
+            app.platform_base_url.as_deref(),
+            Some("https://platform.example.com")
         );
-        assert_eq!(app.sub2api_timeout_secs, 30);
+        assert_eq!(app.platform_timeout_secs, 30);
         assert_eq!(app.min_recharge_amount, 5.5);
         assert_eq!(app.max_recharge_amount, 3000.0);
         assert_eq!(app.max_daily_recharge_amount, 20000.0);

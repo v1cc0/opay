@@ -10,7 +10,7 @@ mod payment;
 mod payment_provider;
 mod provider_instances;
 mod response;
-mod sub2api;
+mod platform;
 mod subscription_plan;
 mod system_config;
 
@@ -23,7 +23,7 @@ use order::{
     audit::AuditLogRepository, repository::OrderRepository, service::OrderService,
     timeout::start_timeout_scheduler,
 };
-use sub2api::Sub2ApiClient;
+use platform::PlatformClient;
 use subscription_plan::SubscriptionPlanRepository;
 use system_config::SystemConfigService;
 use tokio::{net::TcpListener, signal};
@@ -38,7 +38,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub db: DatabaseHandle,
     pub system_config: SystemConfigService,
-    pub sub2api: Option<Sub2ApiClient>,
+    pub platform: Option<PlatformClient>,
     pub order_service: OrderService,
 }
 
@@ -66,10 +66,10 @@ async fn main() -> Result<()> {
             db.clone(),
             Duration::from_secs(config.system_config_cache_ttl_secs),
         ),
-        sub2api: config
-            .sub2api_base_url
+        platform: config
+            .platform_base_url
             .clone()
-            .map(|base_url| Sub2ApiClient::new(base_url, config.sub2api_timeout_secs)),
+            .map(|base_url| PlatformClient::new(base_url, config.platform_timeout_secs)),
         order_service: OrderService::new(
             Arc::clone(&config),
             OrderRepository::new(db.clone()),
@@ -80,9 +80,9 @@ async fn main() -> Result<()> {
                 Duration::from_secs(config.system_config_cache_ttl_secs),
             ),
             config
-                .sub2api_base_url
+                .platform_base_url
                 .clone()
-                .map(|base_url| Sub2ApiClient::new(base_url, config.sub2api_timeout_secs)),
+                .map(|base_url| PlatformClient::new(base_url, config.platform_timeout_secs)),
         ),
     };
 

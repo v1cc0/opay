@@ -67,7 +67,7 @@ async function request<T>(method: string, url: string, body?: Record<string, unk
     Authorization: authorization,
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    'User-Agent': 'Sub2ApiPay/1.0',
+    'User-Agent': 'OPay/1.0',
   };
 
   const res = await fetch(`${BASE_URL}${url}`, {

@@ -13,7 +13,7 @@ This is only the first MVP backend skeleton:
 - admin config endpoint
 - admin env-defaults endpoint
 - admin provider instance CRUD
-- Sub2API client skeleton
+- Platform client skeleton
 - user config endpoint skeleton
 - order repository / audit repository skeleton
 - order service skeleton for create / expire / confirm
@@ -67,7 +67,7 @@ cp config.example.toml config.toml
 - `[app].db_path` default `<repo>/backend-rs/data/opay.db`
 - `[app].payment_providers` Rust MVP-A 当前只应填 `["easypay", "stripe"]`
 - `[app].admin_token` 管理后台 token
-- `[app].sub2api_base_url` `/api/user` 等接口需要
+- `[app].platform_base_url` `/api/user` 等接口需要
 - `[runtime].rust_log` default `info,tower_http=info`
 - `[env]` 可放：
   - `EASY_PAY_*`
@@ -130,9 +130,9 @@ IMAGE_TAG=latest docker compose -f docker-compose.rust.yml up -d
 - Stripe returns real `tradeNo` / `clientSecret` fields from provider response
 - provider instance selection and fee calculation are already real
 - EasyPay notify and Stripe webhook already map back into order confirmation
-- balance fulfillment is now wired to Sub2API `create-and-redeem`
+- balance fulfillment is now wired to Platform `create-and-redeem`
 - subscription orders now accept local `subscription_plans` rows and persist `plan_id / subscription_group_id / subscription_days`
-- subscription fulfillment is now wired to Sub2API `create-and-redeem` with `type=subscription`
+- subscription fulfillment is now wired to Platform `create-and-redeem` with `type=subscription`
 - active subscription renewals now recompute month-based validity from the current expiry timestamp
 - failed balance fulfillment now lands in `FAILED` and can be retried by repeated provider notify/webhook delivery
 - failed subscription fulfillment now lands in `FAILED` and can be retried by repeated provider notify/webhook delivery

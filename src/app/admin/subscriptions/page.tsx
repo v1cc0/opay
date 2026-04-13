@@ -33,7 +33,7 @@ interface SubscriptionPlan {
   groupDefaultMappedModel: string | null;
 }
 
-interface Sub2ApiGroup {
+interface PlatformGroup {
   id: string;
   name: string;
   subscription_type: string;
@@ -46,7 +46,7 @@ interface Sub2ApiGroup {
   default_mapped_model: string | null;
 }
 
-interface Sub2ApiSubscription {
+interface PlatformSubscription {
   id: number;
   user_id: number;
   group_id: number;
@@ -324,7 +324,7 @@ function SubscriptionsContent() {
 
   /* --- plans state --- */
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [groups, setGroups] = useState<Sub2ApiGroup[]>([]);
+  const [groups, setGroups] = useState<PlatformGroup[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
@@ -351,7 +351,7 @@ function SubscriptionsContent() {
   );
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [subs, setSubs] = useState<Sub2ApiSubscription[]>([]);
+  const [subs, setSubs] = useState<PlatformSubscription[]>([]);
   const [subsUser, setSubsUser] = useState<SubsUserInfo | null>(null);
   const [subsLoading, setSubsLoading] = useState(false);
   const [subsSearched, setSubsSearched] = useState(false);
@@ -382,7 +382,7 @@ function SubscriptionsContent() {
   const fetchGroups = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/admin/sub2api/groups?token=${encodeURIComponent(token)}`);
+      const res = await fetch(`/api/admin/platform/groups?token=${encodeURIComponent(token)}`);
       if (res.ok) {
         const data = await res.json();
         setGroups(Array.isArray(data) ? data : (data.groups ?? []));
@@ -539,7 +539,7 @@ function SubscriptionsContent() {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/admin/sub2api/search-users?token=${encodeURIComponent(token)}&keyword=${encodeURIComponent(value.trim())}`,
+          `/api/admin/platform/search-users?token=${encodeURIComponent(token)}&keyword=${encodeURIComponent(value.trim())}`,
         );
         if (res.ok) {
           const data = await res.json();

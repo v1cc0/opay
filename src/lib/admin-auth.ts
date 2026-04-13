@@ -12,12 +12,12 @@ function isLocalAdminToken(token: string): boolean {
   return crypto.timingSafeEqual(expected, received);
 }
 
-async function isSub2ApiAdmin(token: string): Promise<boolean> {
+async function isPlatformAdmin(token: string): Promise<boolean> {
   try {
     const env = getEnv();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(`${env.SUB2API_BASE_URL}/api/v1/auth/me`, {
+    const response = await fetch(`${env.PLATFORM_BASE_URL}/api/v1/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: controller.signal,
     });
@@ -54,7 +54,7 @@ export async function verifyAdminToken(request: NextRequest): Promise<boolean> {
   if (isLocalAdminToken(token)) return true;
 
   // 2. 平台管理员 token
-  return isSub2ApiAdmin(token);
+  return isPlatformAdmin(token);
 }
 
 export function unauthorizedResponse(request?: NextRequest) {

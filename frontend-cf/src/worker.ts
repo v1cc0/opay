@@ -1,7 +1,7 @@
 export interface Env {
   ASSETS: Fetcher;
   API_BASE_URL: string;
-  SUB2API_BASE_URL?: string;
+  PLATFORM_BASE_URL?: string;
   IFRAME_ALLOW_ORIGINS?: string;
 }
 
@@ -17,10 +17,10 @@ function applySecurityHeaders(headers: Headers, env: Env) {
   } else {
     const origins = new Set<string>();
 
-    const sub2apiBase = (env.SUB2API_BASE_URL || '').trim();
-    if (sub2apiBase) {
+    const platformBase = (env.PLATFORM_BASE_URL || '').trim();
+    if (platformBase) {
       try {
-        origins.add(new URL(sub2apiBase).origin);
+        origins.add(new URL(platformBase).origin);
       } catch {
         // ignore invalid URL
       }

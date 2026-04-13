@@ -14,7 +14,7 @@ import {
   getGroup,
   getUserSubscriptions,
   extendSubscription,
-} from '@/lib/sub2api/client';
+} from '@/lib/platform/client';
 import { computeValidityDays, type ValidityUnit } from '@/lib/subscription-utils';
 import { Prisma } from '@prisma/client';
 import { deriveOrderState, isRefundStatus } from './status';

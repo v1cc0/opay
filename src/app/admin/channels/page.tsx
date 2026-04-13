@@ -24,7 +24,7 @@ interface Channel {
   updatedAt: string;
 }
 
-interface Sub2ApiGroup {
+interface PlatformGroup {
   id: number;
   name: string;
   description: string;
@@ -61,13 +61,13 @@ function getTexts(locale: Locale) {
         loading: 'Loading...',
         noChannels: 'No channels found',
         noChannelsHint: 'Click "Sync from Platform" or "New Channel" to get started.',
-        syncFromSub2Api: 'Sync from Platform',
+        syncFromPlatform: 'Sync from Platform',
         newChannel: 'New Channel',
         editChannel: 'Edit Channel',
         colName: 'Name',
         colPlatform: 'Platform',
         colRate: 'Rate',
-        colSub2ApiStatus: 'Platform Status',
+        colPlatformStatus: 'Platform Status',
         colSortOrder: 'Sort',
         colEnabled: 'Enabled',
         colActions: 'Actions',
@@ -114,13 +114,13 @@ function getTexts(locale: Locale) {
         loading: '加载中...',
         noChannels: '暂无渠道',
         noChannelsHint: '点击「从平台同步」或「新建渠道」开始创建。',
-        syncFromSub2Api: '从平台同步',
+        syncFromPlatform: '从平台同步',
         newChannel: '新建渠道',
         editChannel: '编辑渠道',
         colName: '名称',
         colPlatform: '平台',
         colRate: '倍率',
-        colSub2ApiStatus: '平台状态',
+        colPlatformStatus: '平台状态',
         colSortOrder: '排序',
         colEnabled: '启用',
         colActions: '操作',
@@ -219,7 +219,7 @@ function ChannelsContent() {
 
   // Sync modal state
   const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [syncGroups, setSyncGroups] = useState<Sub2ApiGroup[]>([]);
+  const [syncGroups, setSyncGroups] = useState<PlatformGroup[]>([]);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncSelected, setSyncSelected] = useState<Set<number>>(new Set());
   const [syncImporting, setSyncImporting] = useState(false);
@@ -389,7 +389,7 @@ function ChannelsContent() {
     setSyncLoading(true);
     setSyncSelected(new Set());
     try {
-      const res = await fetch(`/api/admin/sub2api/groups?token=${encodeURIComponent(token)}`);
+      const res = await fetch(`/api/admin/platform/groups?token=${encodeURIComponent(token)}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setSyncGroups(data.groups ?? []);
@@ -514,7 +514,7 @@ function ChannelsContent() {
           onClick={openSyncModal}
           className="inline-flex items-center rounded-lg border border-indigo-500 bg-indigo-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-600"
         >
-          {t.syncFromSub2Api}
+          {t.syncFromPlatform}
         </button>
         <button
           type="button"
@@ -550,7 +550,7 @@ function ChannelsContent() {
                 <th className="px-4 py-3 text-left font-medium">{t.colName}</th>
                 <th className="px-4 py-3 text-left font-medium">{t.colPlatform}</th>
                 <th className="px-4 py-3 text-left font-medium">{t.colRate}</th>
-                <th className="px-4 py-3 text-center font-medium">{t.colSub2ApiStatus}</th>
+                <th className="px-4 py-3 text-center font-medium">{t.colPlatformStatus}</th>
                 <th className="px-4 py-3 text-center font-medium">{t.colSortOrder}</th>
                 <th className="px-4 py-3 text-center font-medium">{t.colEnabled}</th>
                 <th className="px-4 py-3 text-right font-medium">{t.colActions}</th>
