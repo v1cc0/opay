@@ -6,7 +6,7 @@ settings:
 
 importers:
 
-  frontend:
+  .:
     dependencies:
       '@stripe/stripe-js':
         specifier: ^9.1.0

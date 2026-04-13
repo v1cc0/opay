@@ -30,7 +30,7 @@ cargo run
 ## Frontend quick start
 
 ```bash
-pnpm install
+pnpm --dir frontend install
 pnpm --dir frontend build
 pnpm --dir frontend cf:check
 pnpm --dir frontend cf:dev
