@@ -3,8 +3,6 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { cloudflare } from '@cloudflare/vite-plugin';
 
-const repoRoot = path.resolve(__dirname, '..');
-
 export default defineConfig({
   plugins: [
     react(),
@@ -12,17 +10,12 @@ export default defineConfig({
       configPath: './wrangler.jsonc',
     }),
   ],
-  publicDir: path.resolve(repoRoot, 'public'),
+  publicDir: path.resolve(__dirname, 'public'),
   resolve: {
     alias: {
-      '@': path.resolve(repoRoot, 'src'),
+      '@': path.resolve(__dirname, 'src'),
       'next/navigation': path.resolve(__dirname, 'src/shims/next-navigation.ts'),
       'next/image': path.resolve(__dirname, 'src/shims/next-image.tsx'),
-    },
-  },
-  server: {
-    fs: {
-      allow: [repoRoot],
     },
   },
 });

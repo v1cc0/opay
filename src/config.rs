@@ -314,7 +314,7 @@ fn default_config_path() -> Result<PathBuf> {
     }
 
     bail!(
-        "config.toml not found. Expected either ./config.toml or {}. Copy backend-rs/config.example.toml to config.toml first",
+        "config.toml not found. Expected either ./config.toml or {}. Copy config.example.toml to config.toml first",
         manifest_path.display()
     );
 }

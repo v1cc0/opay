@@ -1,22 +1,15 @@
-# frontend-cf
+# frontend
 
 Cloudflare **Workers Static Assets** frontend for `opay`.
-
-## Current direction
-
-- Static frontend served by Cloudflare Workers Assets
-- Edge Worker proxies `/api/*` and `/healthz` to the Rust backend
-- Existing client pages/components are reused from the repo `src/` tree through Vite aliases and small Next.js shims
-- Rust backend remains the source of truth for business APIs
 
 ## Commands
 
 ```bash
-pnpm --dir frontend-cf dev
-pnpm --dir frontend-cf build
-pnpm --dir frontend-cf cf:check
-pnpm --dir frontend-cf cf:dev
-pnpm --dir frontend-cf cf:deploy
+pnpm --dir frontend dev
+pnpm --dir frontend build
+pnpm --dir frontend cf:check
+pnpm --dir frontend cf:dev
+pnpm --dir frontend cf:deploy
 ```
 
 ## Local development
@@ -25,13 +18,13 @@ pnpm --dir frontend-cf cf:deploy
 2. Copy local vars:
 
 ```bash
-cp frontend-cf/.dev.vars.example frontend-cf/.dev.vars
+cp frontend/.dev.vars.example frontend/.dev.vars
 ```
 
 3. Start Worker dev:
 
 ```bash
-pnpm --dir frontend-cf cf:dev
+pnpm --dir frontend cf:dev
 ```
 
 ## Important vars

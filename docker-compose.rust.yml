@@ -1,10 +1,5 @@
 # docker-compose.rust.yml
-# 使用 Rust MVP-A Docker Hub 镜像部署（本地持久化 Turso 数据文件）
-# 适合：只上线 Rust backend-first MVP-A（EasyPay + Stripe）
-#
-# 启动：IMAGE_TAG=1.0.0 docker compose -f docker-compose.rust.yml up -d
-# 更新：IMAGE_TAG=1.1.0 docker compose -f docker-compose.rust.yml pull && docker compose -f docker-compose.rust.yml up -d
-# 不指定 IMAGE_TAG 时默认使用 latest
+# 使用 Rust MVP-A Docker 镜像部署（本地持久化 Turso 数据文件）
 
 services:
   app:
@@ -12,6 +7,6 @@ services:
     ports:
       - '${RUST_APP_PORT:-8080}:8080'
     volumes:
-      - ./backend-rs-data:/data
-      - ./backend-rs/config.toml:/app/config.toml:ro
+      - ./data:/data
+      - ./config.toml:/app/config.toml:ro
     restart: unless-stopped

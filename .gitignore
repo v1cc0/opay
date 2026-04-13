@@ -1,10 +1,11 @@
-node_modules
-frontend-cf/node_modules
-frontend-cf/dist
-frontend-cf/.wrangler
-backend-rs/target
-backend-rs/data
-backend-rs/config.toml
+/target
+/data
+/config.toml
+/node_modules
+/frontend/node_modules
+/frontend/dist
+/frontend/.wrangler
+/frontend/.dev.vars
 .DS_Store
 .env*
 PROGRESS.md
@@ -13,3 +14,5 @@ INCIDENTS.md
 AGENTS.md
 GEMINI.md
 CLAUDE.md
+BACKEND_README.tmp.md
+REPO_README.tmp.md

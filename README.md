@@ -1,47 +1,49 @@
-# opay
+# OPay
 
-`opay` 当前是后续重品牌化与继续开发的新基础盘，当前只保留两条主线：
+`opay` 现在采用新的仓库布局：
 
-- `backend-rs/`: Rust backend (`axum + turso`)
-- `frontend-cf/`: Cloudflare Workers Static Assets frontend
+- repo root：Rust backend（主骨架）
+- `frontend/`：Cloudflare Workers Static Assets frontend
 
-同时迁入了 Workers 前端当前依赖的共享前端源码与静态资源：
+## Layout
 
-- `src/app/admin`
-- `src/app/pay`
-- `src/app/globals.css`
-- `src/components`
-- `src/lib`
-- `public`
+```text
+.
+├── Cargo.toml
+├── Cargo.lock
+├── Dockerfile
+├── config.example.toml
+├── migrations/
+├── src/              # Rust backend
+├── testdata/
+├── frontend/         # Vite + React + Wrangler frontend
+└── .github/workflows/ci.yml
+```
 
-## Quick start
-
-### Rust backend
+## Backend quick start
 
 ```bash
-cd backend-rs
 cp config.example.toml config.toml
 cargo run
 ```
 
-### Workers frontend
+## Frontend quick start
 
 ```bash
 pnpm install
-pnpm frontend:build
-pnpm frontend:cf:check
+pnpm --dir frontend build
+pnpm --dir frontend cf:check
+pnpm --dir frontend cf:dev
 ```
 
-本地联调：
+本地联调建议：
 
-1. 先启动 Rust backend (`http://127.0.0.1:8080`)
-2. 再运行：
+1. 先启动 Rust backend（默认 `http://127.0.0.1:8080`）
+2. 再启动 Cloudflare Workers frontend dev
+
+## Docker
 
 ```bash
-pnpm frontend:cf:dev
+docker build -t opay-rs:latest .
+IMAGE_TAG=latest docker compose -f docker-compose.rust.yml up -d
 ```
-
-详细说明见：
-
-- `backend-rs/README.md`
-- `frontend-cf/README.md`
