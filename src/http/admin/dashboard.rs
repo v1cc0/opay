@@ -126,7 +126,11 @@ async fn build_dashboard_response(
     days: i64,
     now_ts: i64,
 ) -> AppResult<DashboardResponse> {
-    let conn = state.db.connect().map_err(AppError::internal)?;
+    let conn = state
+        .db
+        .connect_readonly()
+        .await
+        .map_err(AppError::internal)?;
     let today_start = get_biz_day_start_utc_timestamp(now_ts);
     let start_ts = today_start - days * 86_400;
 
@@ -480,10 +484,8 @@ mod tests {
     };
 
     async fn test_state() -> AppState {
-        let db_path = std::env::temp_dir().join(format!(
-            "opay-admin-dashboard-{}.db",
-            uuid::Uuid::new_v4()
-        ));
+        let db_path =
+            std::env::temp_dir().join(format!("opay-admin-dashboard-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();
         db.run_migrations().await.unwrap();
 

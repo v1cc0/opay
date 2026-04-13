@@ -651,7 +651,7 @@ async fn query_usage_by_payment_type(
     payment_types: &[String],
 ) -> Result<HashMap<String, i64>> {
     let biz_day_start = get_biz_day_start_utc_timestamp();
-    let conn = state.db.connect()?;
+    let conn = state.db.connect_readonly().await?;
     let mut rows = conn
         .query(
             "SELECT payment_type, COALESCE(SUM(amount_cents), 0) FROM orders WHERE status IN (?1, ?2, ?3) AND paid_at >= ?4 GROUP BY payment_type",
@@ -684,7 +684,7 @@ async fn query_usage_by_payment_type(
 
 async fn query_usage_by_provider_instance(state: &AppState) -> Result<HashMap<String, i64>> {
     let biz_day_start = get_biz_day_start_utc_timestamp();
-    let conn = state.db.connect()?;
+    let conn = state.db.connect_readonly().await?;
     let mut rows = conn
         .query(
             "SELECT provider_instance_id, COALESCE(SUM(pay_amount_cents), 0) FROM orders WHERE provider_instance_id IS NOT NULL AND status IN (?1, ?2, ?3) AND paid_at >= ?4 GROUP BY provider_instance_id",

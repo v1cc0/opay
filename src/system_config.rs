@@ -47,7 +47,7 @@ impl SystemConfigService {
             return Ok(Some(value));
         }
 
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT value FROM system_configs WHERE key = ?1")
             .await
@@ -86,7 +86,7 @@ impl SystemConfigService {
     }
 
     pub async fn list_all(&self) -> Result<Vec<SystemConfigEntry>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT key, value, group_name, label, updated_at FROM system_configs ORDER BY group_name ASC, key ASC",

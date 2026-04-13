@@ -119,7 +119,7 @@ impl OrderRepository {
     }
 
     pub async fn get_by_id(&self, id: &str) -> Result<Option<OrderRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let sql = format!("SELECT {ORDER_SELECT_COLUMNS} FROM orders WHERE id = ?1");
         let mut stmt = conn
             .prepare(&sql)
@@ -161,7 +161,7 @@ impl OrderRepository {
     }
 
     pub async fn count_pending_by_user(&self, user_id: i64) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM orders WHERE user_id = ?1 AND status = 'PENDING'")
             .await
@@ -174,7 +174,7 @@ impl OrderRepository {
     }
 
     pub async fn count_by_user_total(&self, user_id: i64) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM orders WHERE user_id = ?1")
             .await
@@ -187,7 +187,7 @@ impl OrderRepository {
     }
 
     pub async fn count_statuses_by_user(&self, user_id: i64) -> Result<Vec<StatusCount>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT status, COUNT(*) FROM orders WHERE user_id = ?1 GROUP BY status",
@@ -250,7 +250,7 @@ impl OrderRepository {
     }
 
     pub async fn count_for_admin(&self, filters: &AdminOrderListFilters) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let (where_clause, params) = build_admin_filter_clause(filters);
         let sql = format!("SELECT COUNT(*) FROM orders{where_clause}");
         let mut stmt = conn
@@ -637,7 +637,7 @@ impl OrderRepository {
     }
 
     async fn query_orders(&self, sql: &str, params: Params) -> Result<Vec<OrderRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(sql, params)
             .await

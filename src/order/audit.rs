@@ -55,7 +55,7 @@ impl AuditLogRepository {
     }
 
     pub async fn count_by_order_and_action(&self, order_id: &str, action: &str) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM audit_logs WHERE order_id = ?1 AND action = ?2")
             .await
@@ -69,7 +69,7 @@ impl AuditLogRepository {
     }
 
     pub async fn list_by_order(&self, order_id: &str) -> Result<Vec<AuditLogRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, order_id, action, detail, operator, created_at
@@ -101,7 +101,7 @@ impl AuditLogRepository {
         order_id: &str,
         action: &str,
     ) -> Result<Option<AuditLogRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, order_id, action, detail, operator, created_at

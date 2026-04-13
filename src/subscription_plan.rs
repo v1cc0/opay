@@ -48,7 +48,7 @@ impl SubscriptionPlanRepository {
     }
 
     pub async fn get_by_id(&self, id: &str) -> Result<Option<SubscriptionPlanRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, group_id, name, description, price_cents, original_price_cents, validity_days, validity_unit, features, product_name, for_sale, sort_order, created_at, updated_at
@@ -70,7 +70,7 @@ impl SubscriptionPlanRepository {
     }
 
     pub async fn list_for_sale(&self) -> Result<Vec<SubscriptionPlanRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, group_id, name, description, price_cents, original_price_cents, validity_days, validity_unit, features, product_name, for_sale, sort_order, created_at, updated_at
@@ -95,7 +95,7 @@ impl SubscriptionPlanRepository {
     }
 
     pub async fn list_all(&self) -> Result<Vec<SubscriptionPlanRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, group_id, name, description, price_cents, original_price_cents, validity_days, validity_unit, features, product_name, for_sale, sort_order, created_at, updated_at
@@ -176,7 +176,7 @@ impl SubscriptionPlanRepository {
     }
 
     pub async fn count_active_orders_by_plan(&self, plan_id: &str) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare(
                 "SELECT COUNT(*) FROM orders WHERE plan_id = ?1 AND status IN ('PENDING', 'PAID', 'RECHARGING')",

@@ -45,7 +45,7 @@ impl ProviderInstanceRepository {
     }
 
     pub async fn list(&self, provider_key: Option<&str>) -> Result<Vec<ProviderInstanceRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = if let Some(provider_key) = provider_key {
             conn.query(
                 "SELECT id, provider_key, name, config, supported_types, enabled, sort_order, limits, refund_enabled, created_at, updated_at FROM payment_provider_instances WHERE provider_key = ?1 ORDER BY sort_order ASC",
@@ -75,7 +75,7 @@ impl ProviderInstanceRepository {
     }
 
     pub async fn get(&self, id: &str) -> Result<Option<ProviderInstanceRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT id, provider_key, name, config, supported_types, enabled, sort_order, limits, refund_enabled, created_at, updated_at FROM payment_provider_instances WHERE id = ?1")
             .await
@@ -154,7 +154,7 @@ impl ProviderInstanceRepository {
     }
 
     pub async fn count_pending_orders(&self, instance_id: &str) -> Result<i64> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut stmt = conn
             .prepare(
                 "SELECT COUNT(*) FROM orders WHERE provider_instance_id = ?1 AND status IN (?2, ?3, ?4)",

@@ -5,6 +5,7 @@ use turso::{Builder, Connection, Database, Error as TursoError, Row};
 
 const MVCC_JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode = 'mvcc'";
 const CURRENT_JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode";
+const QUERY_ONLY_ON_SQL: &str = "PRAGMA query_only=1";
 const BEGIN_CONCURRENT_SQL: &str = "BEGIN CONCURRENT";
 const COMMIT_SQL: &str = "COMMIT";
 const ROLLBACK_SQL: &str = "ROLLBACK";
@@ -86,6 +87,14 @@ impl DatabaseHandle {
             .context("failed to open turso connection")
     }
 
+    pub async fn connect_readonly(&self) -> Result<Connection> {
+        let conn = self.connect()?;
+        conn.execute(QUERY_ONLY_ON_SQL, ())
+            .await
+            .context("failed to enable query_only on readonly turso connection")?;
+        Ok(conn)
+    }
+
     pub async fn begin_concurrent(&self) -> Result<ConcurrentTx> {
         let conn = self.connect()?;
         conn.execute(BEGIN_CONCURRENT_SQL, ())
@@ -95,7 +104,7 @@ impl DatabaseHandle {
     }
 
     pub async fn current_journal_mode(&self) -> Result<String> {
-        let conn = self.connect()?;
+        let conn = self.connect_readonly().await?;
         let mut rows = conn
             .query(CURRENT_JOURNAL_MODE_SQL, ())
             .await
@@ -131,7 +140,7 @@ impl DatabaseHandle {
     }
 
     pub async fn ping(&self) -> Result<()> {
-        let conn = self.connect()?;
+        let conn = self.connect_readonly().await?;
         let mut rows = conn
             .query("SELECT 1", ())
             .await
@@ -149,7 +158,7 @@ impl DatabaseHandle {
     }
 
     pub async fn applied_migration_count(&self) -> Result<i64> {
-        let conn = self.connect()?;
+        let conn = self.connect_readonly().await?;
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM schema_migrations")
             .await
@@ -278,6 +287,26 @@ mod tests {
             .unwrap();
         let row = rows.next().await.unwrap().unwrap();
         assert_eq!(parse_i64_from_row(&row, 0).unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn connect_readonly_rejects_write() {
+        let path = std::env::temp_dir().join(format!("opay-db-readonly-{}.db", Uuid::new_v4()));
+        let db = DatabaseHandle::open_local(&path).await.unwrap();
+        let conn = db.connect().unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS readonly_items (id INTEGER PRIMARY KEY)",
+            (),
+        )
+        .await
+        .unwrap();
+
+        let readonly = db.connect_readonly().await.unwrap();
+        let err = readonly
+            .execute("INSERT INTO readonly_items (id) VALUES (1)", ())
+            .await
+            .unwrap_err();
+        assert!(err.to_string().to_ascii_lowercase().contains("query_only"));
     }
 
     #[tokio::test]

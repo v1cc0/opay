@@ -52,7 +52,7 @@ impl ChannelRepository {
     }
 
     pub async fn get(&self, id: &str) -> Result<Option<ChannelRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, group_id, name, platform, rate_multiplier_bps, description, models, features, sort_order, enabled, created_at, updated_at
@@ -70,7 +70,7 @@ impl ChannelRepository {
     }
 
     pub async fn get_by_group_id(&self, group_id: i64) -> Result<Option<ChannelRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = conn
             .query(
                 "SELECT id, group_id, name, platform, rate_multiplier_bps, description, models, features, sort_order, enabled, created_at, updated_at
@@ -140,7 +140,7 @@ impl ChannelRepository {
     }
 
     async fn query_list(&self, enabled_only: bool) -> Result<Vec<ChannelRecord>> {
-        let conn = self.db.connect()?;
+        let conn = self.db.connect_readonly().await?;
         let mut rows = if enabled_only {
             conn.query(
                 "SELECT id, group_id, name, platform, rate_multiplier_bps, description, models, features, sort_order, enabled, created_at, updated_at
