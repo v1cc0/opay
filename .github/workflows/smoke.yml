@@ -1,0 +1,77 @@
+name: Smoke Suite
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-api-smoke:
+    name: Local API Smoke Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare local smoke config
+        run: |
+          cat > config.toml <<'EOF'
+          [app]
+          host = "0.0.0.0"
+          port = 8080
+          db_path = "data/opay-smoke.db"
+          payment_providers = ["stripe"]
+          admin_token = "opay-admin-smoke-token"
+          system_config_cache_ttl_secs = 30
+          platform_base_url = "http://127.0.0.1:18080"
+          platform_timeout_secs = 10
+          min_recharge_amount = 1
+          max_recharge_amount = 1000
+          max_daily_recharge_amount = 10000
+          pay_help_image_url = ""
+          pay_help_text = "CI smoke environment"
+          stripe_publishable_key = ""
+
+          [runtime]
+          rust_log = "info,tower_http=info"
+
+          [env]
+          ORDER_TIMEOUT_MINUTES = 5
+          IFRAME_ALLOW_ORIGINS = ""
+          PLATFORM_ADMIN_API_KEY = "platform-admin-key"
+          EOF
+
+      - name: Run local smoke suite
+        run: |
+          python3 scripts/run_local_smoke_suite.py \
+            --output "$RUNNER_TEMP/opay-local-smoke-suite.json" \
+            --logs-dir "$RUNNER_TEMP/opay-local-smoke-logs"
+
+      - name: Upload smoke summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opay-local-smoke-summary
+          path: ${{ runner.temp }}/opay-local-smoke-suite.json
+          if-no-files-found: warn
+
+      - name: Upload smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opay-local-smoke-logs
+          path: ${{ runner.temp }}/opay-local-smoke-logs
+          if-no-files-found: warn
