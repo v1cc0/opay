@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("failed to bind {}", addr))?;
 
-    info!(bind = %addr, db_path = %config.db_path.display(), "sub2apipay-rs listening");
+    info!(bind = %addr, db_path = %config.db_path.display(), "opay-rs listening");
 
     serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())

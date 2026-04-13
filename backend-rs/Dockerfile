@@ -18,7 +18,7 @@ RUN apt-get update \
     && mkdir -p /data \
     && chown -R app:app /app /data
 
-COPY --from=builder /app/target/release/sub2apipay-rs /usr/local/bin/sub2apipay-rs
+COPY --from=builder /app/target/release/opay-rs /usr/local/bin/opay-rs
 COPY config.example.toml /app/config.example.toml
 
 VOLUME ["/data"]
@@ -27,4 +27,4 @@ USER app
 
 EXPOSE 8080
 
-CMD ["sub2apipay-rs"]
+CMD ["opay-rs"]

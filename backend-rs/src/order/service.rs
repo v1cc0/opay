@@ -645,7 +645,7 @@ impl OrderService {
             .filter(|value| !value.is_empty())
             .map(str::to_string)
             .or_else(|| order.refund_request_reason.clone())
-            .unwrap_or_else(|| format!("sub2apipay refund order:{}", order.id));
+            .unwrap_or_else(|| format!("opay refund order:{}", order.id));
 
         let admin_api_key = self.sub2api_admin_api_key().await?;
         let sub2api = self
@@ -848,7 +848,7 @@ impl OrderService {
                 &order.recharge_code,
                 cents_to_amount(order.amount_cents),
                 order.user_id,
-                &format!("sub2apipay recharge order:{}", order.id),
+                &format!("opay recharge order:{}", order.id),
                 admin_api_key,
             )
             .await;
@@ -1004,7 +1004,7 @@ impl OrderService {
                 &order.recharge_code,
                 cents_to_amount(order.amount_cents),
                 order.user_id,
-                &format!("sub2apipay subscription order:{}", order.id),
+                &format!("opay subscription order:{}", order.id),
                 group_id,
                 granted_days,
                 admin_api_key,
@@ -1312,7 +1312,7 @@ impl OrderService {
                     .extend_subscription(
                         subscription_id,
                         -deduction.subscription_days,
-                        &format!("sub2apipay:refund-sub:{}:{}", order.id, now_ts),
+                        &format!("opay:refund-sub:{}:{}", order.id, now_ts),
                         admin_api_key,
                     )
                     .await?;
@@ -1325,8 +1325,8 @@ impl OrderService {
                 .subtract_balance(
                     order.user_id,
                     cents_to_amount(deduction.balance_amount_cents),
-                    &format!("sub2apipay refund order:{}", order.id),
-                    &format!("sub2apipay:refund:{}:{}", order.id, now_ts),
+                    &format!("opay refund order:{}", order.id),
+                    &format!("opay:refund:{}:{}", order.id, now_ts),
                     admin_api_key,
                 )
                 .await?;
@@ -1353,7 +1353,7 @@ impl OrderService {
                 .extend_subscription(
                     subscription_id,
                     deduction.subscription_days,
-                    &format!("sub2apipay:refund-sub-rollback:{}:{}", order.id, now_ts),
+                    &format!("opay:refund-sub-rollback:{}:{}", order.id, now_ts),
                     admin_api_key,
                 )
                 .await
@@ -1388,8 +1388,8 @@ impl OrderService {
             .add_balance(
                 order.user_id,
                 cents_to_amount(deduction.balance_amount_cents),
-                &format!("sub2apipay refund rollback order:{}", order.id),
-                &format!("sub2apipay:refund-rollback:{}:{}", order.id, now_ts),
+                &format!("opay refund rollback order:{}", order.id),
+                &format!("opay:refund-rollback:{}:{}", order.id, now_ts),
                 admin_api_key,
             )
             .await
@@ -1947,7 +1947,7 @@ mod tests {
         DatabaseHandle,
     ) {
         let path =
-            std::env::temp_dir().join(format!("sub2apipay-service-{}.db", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-service-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
 
@@ -1999,7 +1999,7 @@ mod tests {
         DatabaseHandle,
     ) {
         let path =
-            std::env::temp_dir().join(format!("sub2apipay-state-{}.db", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-state-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
 
@@ -2277,7 +2277,7 @@ mod tests {
         assert_eq!(captured[0].x_api_key.as_deref(), Some("test-admin-key"));
         assert_eq!(
             captured[0].idempotency_key.as_deref(),
-            Some(format!("sub2apipay:recharge:{}", order.recharge_code).as_str())
+            Some(format!("opay:recharge:{}", order.recharge_code).as_str())
         );
         assert_eq!(captured[0].body.redeem_type, "balance");
         assert_eq!(captured[0].body.user_id, 8);
@@ -2549,7 +2549,7 @@ mod tests {
             .await
             .unwrap();
 
-        insert_subscription_plan(&db, "plan_sub", 5, 1999, 30, "day", Some("Sub2API Pro")).await;
+        insert_subscription_plan(&db, "plan_sub", 5, 1999, 30, "day", Some("OPay Pro")).await;
 
         let order = orders
             .insert_pending(NewPendingOrder {

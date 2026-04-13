@@ -11,7 +11,7 @@ function getTexts(locale: Locale) {
   return locale === 'en'
     ? {
         missingToken: 'Missing admin token',
-        missingTokenHint: 'Please access the admin page from the Sub2API platform.',
+        missingTokenHint: 'Please access the admin page from the platform entry.',
         title: 'Payment Config',
         subtitle: 'Configure payment providers and settings',
         basicConfig: 'Basic Settings',
@@ -67,14 +67,14 @@ function getTexts(locale: Locale) {
         instanceSaveFailed: 'Failed to save instance',
         instanceDeleteFailed: 'Failed to delete instance',
         allChannels: 'All Channels',
-        sub2apiAdminApiKey: 'Sub2API Admin API Key',
+        sub2apiAdminApiKey: 'Platform Admin API Key',
         sub2apiAdminApiKeyHint: 'Leave empty to use environment variable',
         defaultDeductBalance: 'Default Deduct Balance',
         defaultDeductBalanceHint: 'When enabled, refund approval defaults to deducting balance/subscription',
       }
     : {
         missingToken: '缺少管理员凭证',
-        missingTokenHint: '请从 Sub2API 平台正确访问管理页面',
+        missingTokenHint: '请从平台入口正确访问管理页面',
         title: '支付配置',
         subtitle: '管理支付服务商与相关设置',
         basicConfig: '基础配置',
@@ -130,7 +130,7 @@ function getTexts(locale: Locale) {
         instanceSaveFailed: '保存实例失败',
         instanceDeleteFailed: '删除实例失败',
         allChannels: '全部渠道',
-        sub2apiAdminApiKey: 'Sub2API Admin API Key',
+        sub2apiAdminApiKey: 'Platform Admin API Key',
         sub2apiAdminApiKeyHint: '留空则使用环境变量',
         defaultDeductBalance: '默认扣除余额/订阅',
         defaultDeductBalanceHint: '开启后，退款通过时默认扣除余额/订阅；关闭时默认不扣除',
@@ -625,7 +625,7 @@ function PaymentConfigContent() {
                     key: 'SUB2API_ADMIN_API_KEY',
                     value: rcSub2apiKey,
                     group: 'connection',
-                    label: 'Sub2API Admin API Key',
+                    label: 'Platform Admin API Key',
                   },
                   { key: 'RECHARGE_MIN_AMOUNT', value: rcMinAmount, group: 'payment', label: '最小充值金额' },
                   { key: 'RECHARGE_MAX_AMOUNT', value: rcMaxAmount, group: 'payment', label: '最大充值金额' },
@@ -744,7 +744,7 @@ function PaymentConfigContent() {
               value={rcPrefix}
               onChange={(e) => setRcPrefix(e.target.value)}
               className={inputCls}
-              placeholder="Sub2API"
+              placeholder="OPay"
             />
           </div>
           <div>
@@ -762,7 +762,7 @@ function PaymentConfigContent() {
             <div
               className={`rounded-lg border px-3 py-2 text-sm ${isDark ? 'border-slate-600 bg-slate-700 text-slate-300' : 'border-slate-300 bg-slate-50 text-slate-600'}`}
             >
-              {`${rcPrefix.trim() || 'Sub2API'} 100 ${rcSuffix.trim() || 'CNY'}`.trim()}
+              {`${rcPrefix.trim() || 'OPay'} 100 ${rcSuffix.trim() || 'CNY'}`.trim()}
             </div>
           </div>
         </div>
@@ -871,7 +871,7 @@ function PaymentConfigContent() {
               <div className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t.loadingEnvDefaults}</div>
             ) : (
               <>
-                {/* Sub2API Admin API Key + Max pending orders */}
+                {/* Platform Admin API Key + Max pending orders */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                   <div>
                     <label className={labelCls}>{t.sub2apiAdminApiKey}</label>

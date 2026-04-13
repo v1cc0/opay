@@ -771,7 +771,7 @@ mod tests {
 
     async fn test_repo() -> OrderRepository {
         let path =
-            std::env::temp_dir().join(format!("sub2apipay-test-{}.db", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-test-{}.db", uuid::Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
         OrderRepository::new(db)

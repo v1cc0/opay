@@ -69,7 +69,7 @@ function AdminContent() {
     locale === 'en'
       ? {
           missingToken: 'Missing admin token',
-          missingTokenHint: 'Please access the admin page from the Sub2API platform.',
+          missingTokenHint: 'Please access the admin page from the platform entry.',
           invalidToken: 'Invalid admin token',
           requestFailed: 'Request failed',
           loadOrdersFailed: 'Failed to load orders',
@@ -109,7 +109,7 @@ function AdminContent() {
         }
       : {
           missingToken: '缺少管理员凭证',
-          missingTokenHint: '请从 Sub2API 平台正确访问管理页面',
+          missingTokenHint: '请从平台入口正确访问管理页面',
           invalidToken: '管理员凭证无效',
           requestFailed: '请求失败',
           loadOrdersFailed: '加载订单列表失败',

@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "sub2apipay-frontend-cf",
+  "name": "opay-frontend-cf",
   "main": "./src/worker.ts",
   "compatibility_date": "2026-04-13",
   "assets": {

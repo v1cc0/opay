@@ -242,7 +242,7 @@ mod tests {
         sub2api_base_url: Option<String>,
         payment_providers: Vec<String>,
     ) -> AppState {
-        let path = std::env::temp_dir().join(format!("sub2apipay-user-{}.db", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!("opay-user-{}.db", Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
 

@@ -1,6 +1,6 @@
 # frontend-cf
 
-Cloudflare **Workers Static Assets** frontend for `sub2apipay`.
+Cloudflare **Workers Static Assets** frontend for `opay`.
 
 ## Current direction
 

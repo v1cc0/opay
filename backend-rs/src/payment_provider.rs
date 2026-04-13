@@ -1159,7 +1159,7 @@ mod tests {
 
     async fn test_state() -> AppState {
         let path =
-            std::env::temp_dir().join(format!("sub2apipay-payment-provider-{}.db", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-payment-provider-{}.db", Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
         db.run_migrations().await.unwrap();
 

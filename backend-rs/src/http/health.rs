@@ -28,7 +28,7 @@ async fn healthz(State(state): State<AppState>) -> Json<HealthResponse> {
 
     Json(HealthResponse {
         ok: db_ok,
-        service: "sub2apipay-rs",
+        service: "opay-rs",
         database: DatabaseStatus {
             kind: "turso-local",
             path: state.config.db_path.display().to_string(),

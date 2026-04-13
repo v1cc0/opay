@@ -295,7 +295,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // 构建支付商品名称（与 order/service.ts 逻辑保持一致）
   let subject: string;
   if (order.orderType === 'subscription' && order.plan) {
-    subject = order.plan.productName || `Sub2API 订阅 ${order.plan.name}`;
+    subject = order.plan.productName || `OPay 订阅 ${order.plan.name}`;
   } else {
     const nameConfigs = await getSystemConfigs(['PRODUCT_NAME_PREFIX', 'PRODUCT_NAME_SUFFIX']);
     const prefix = nameConfigs['PRODUCT_NAME_PREFIX']?.trim();
@@ -303,7 +303,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (prefix || suffix) {
       subject = `${prefix || ''} ${payAmount.toFixed(2)} ${suffix || ''}`.trim();
     } else {
-      subject = `Sub2API ${payAmount.toFixed(2)} CNY`;
+      subject = `OPay ${payAmount.toFixed(2)} CNY`;
     }
   }
 

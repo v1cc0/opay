@@ -1,7 +1,7 @@
 [app]
 host = "0.0.0.0"
 port = 8080
-db_path = "data/sub2apipay.db"
+db_path = "data/opay.db"
 payment_providers = ["easypay", "stripe"]
 admin_token = "replace-with-a-long-random-token"
 system_config_cache_ttl_secs = 30

@@ -53,7 +53,7 @@ export async function verifyAdminToken(request: NextRequest): Promise<boolean> {
   // 1. 本地 admin token
   if (isLocalAdminToken(token)) return true;
 
-  // 2. Sub2API 管理员 token
+  // 2. 平台管理员 token
   return isSub2ApiAdmin(token);
 }
 

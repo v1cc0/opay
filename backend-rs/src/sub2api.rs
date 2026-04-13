@@ -601,7 +601,7 @@ impl Sub2ApiClient {
                 self.base_url
             ))
             .header("x-api-key", admin_api_key)
-            .header("Idempotency-Key", format!("sub2apipay:recharge:{code}"))
+            .header("Idempotency-Key", format!("opay:recharge:{code}"))
             .json(&CreateAndRedeemRequest {
                 code,
                 redeem_type,

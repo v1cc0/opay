@@ -315,7 +315,7 @@ mod tests {
 
     async fn test_repo() -> SubscriptionPlanRepository {
         let path = std::env::temp_dir().join(format!(
-            "sub2apipay-subscription-plan-{}.db",
+            "opay-subscription-plan-{}.db",
             uuid::Uuid::new_v4()
         ));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
@@ -338,7 +338,7 @@ mod tests {
                 Value::Integer(1999),
                 Value::Integer(30),
                 Value::Text("day".to_string()),
-                Value::Text("Sub2API Basic".to_string()),
+                Value::Text("OPay Basic".to_string()),
                 Value::Integer(1),
             ]),
         )
@@ -350,7 +350,7 @@ mod tests {
         assert_eq!(plan.price_cents, 1999);
         assert_eq!(plan.validity_days, 30);
         assert_eq!(plan.validity_unit, "day");
-        assert_eq!(plan.product_name.as_deref(), Some("Sub2API Basic"));
+        assert_eq!(plan.product_name.as_deref(), Some("OPay Basic"));
         assert!(plan.for_sale);
     }
 

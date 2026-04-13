@@ -410,7 +410,7 @@ fn resolve_path(base_dir: &Path, value: &str) -> PathBuf {
 }
 
 fn default_db_path() -> PathBuf {
-    PathBuf::from(format!("{}/data/sub2apipay.db", env!("CARGO_MANIFEST_DIR")))
+    PathBuf::from(format!("{}/data/opay.db", env!("CARGO_MANIFEST_DIR")))
 }
 
 fn normalize_optional_string(value: String) -> Option<String> {
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn loads_structured_config_toml() {
         let temp_dir =
-            std::env::temp_dir().join(format!("sub2apipay-rs-config-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-rs-config-{}", Uuid::new_v4()));
         fs::create_dir_all(&temp_dir).unwrap();
 
         let config_path = temp_dir.join("config.toml");
@@ -501,7 +501,7 @@ ORDER_TIMEOUT_MINUTES = 7
     #[test]
     fn supports_legacy_root_keys_and_relative_secret_paths() {
         let temp_dir =
-            std::env::temp_dir().join(format!("sub2apipay-rs-config-{}", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-rs-config-{}", Uuid::new_v4()));
         fs::create_dir_all(&temp_dir).unwrap();
 
         let key_path = temp_dir.join("keys/private.pem");

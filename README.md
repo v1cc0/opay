@@ -1,6 +1,6 @@
 # opay
 
-`opay` 是从 `sub2apipay` 迁出的新基础盘，当前只保留后续要继续演进的两条主线：
+`opay` 当前是后续重品牌化与继续开发的新基础盘，当前只保留两条主线：
 
 - `backend-rs/`: Rust backend (`axum + turso`)
 - `frontend-cf/`: Cloudflare Workers Static Assets frontend

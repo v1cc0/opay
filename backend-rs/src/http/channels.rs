@@ -160,7 +160,7 @@ mod tests {
 
     async fn test_state(sub2api_base_url: Option<String>) -> AppState {
         let db_path =
-            std::env::temp_dir().join(format!("sub2apipay-channels-route-{}.db", Uuid::new_v4()));
+            std::env::temp_dir().join(format!("opay-channels-route-{}.db", Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();
         db.run_migrations().await.unwrap();
 

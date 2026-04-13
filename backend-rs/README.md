@@ -1,6 +1,6 @@
-# sub2apipay-rs
+# opay-rs
 
-Native Turso backend skeleton for the backend-first Rust migration of Sub2ApiPay.
+Native Turso backend for OPay.
 
 ## Current scope
 
@@ -36,7 +36,7 @@ Default bind address:
 
 Default database path:
 
-- `<repo>/backend-rs/data/sub2apipay.db`
+- `<repo>/backend-rs/data/opay.db`
 
 ## Config file
 
@@ -64,7 +64,7 @@ cp config.example.toml config.toml
 
 - `[app].host` default `0.0.0.0`
 - `[app].port` default `8080`
-- `[app].db_path` default `<repo>/backend-rs/data/sub2apipay.db`
+- `[app].db_path` default `<repo>/backend-rs/data/opay.db`
 - `[app].payment_providers` Rust MVP-A 当前只应填 `["easypay", "stripe"]`
 - `[app].admin_token` 管理后台 token
 - `[app].sub2api_base_url` `/api/user` 等接口需要
@@ -81,7 +81,7 @@ cp config.example.toml config.toml
 构建镜像：
 
 ```bash
-docker build -t touwaeriol/sub2apipay-rs:latest backend-rs
+docker build -t opay-rs:latest backend-rs
 ```
 
 使用仓库根目录的 compose 文件启动：
@@ -95,7 +95,7 @@ IMAGE_TAG=latest docker compose -f docker-compose.rust.yml up -d
 - 宿主机端口：`RUST_APP_PORT`，默认 `8080`
 - 容器内监听：固定 `0.0.0.0:8080`
 - 数据目录：`./backend-rs-data -> /data`
-- 数据库文件：`/data/sub2apipay.db`
+- 数据库文件：`/data/opay.db`
 - 配置文件挂载：`./backend-rs/config.toml -> /app/config.toml`
 
 ## Available routes

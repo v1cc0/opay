@@ -30,8 +30,8 @@ function OrdersContent() {
 
   const text = {
     missingAuth: pickLocaleText(locale, '缺少认证信息', 'Missing authentication information'),
-    visitOrders: pickLocaleText(locale, '请从 Sub2API 平台正确访问订单页面', 'Please open the orders page from Sub2API'),
-    sessionExpired: pickLocaleText(locale, '登录态已失效，请从 Sub2API 重新进入支付页。', 'Session expired. Please re-enter from Sub2API.'),
+    visitOrders: pickLocaleText(locale, '请从平台入口正确访问订单页面', 'Please open the orders page from the platform entry'),
+    sessionExpired: pickLocaleText(locale, '登录态已失效，请从平台入口重新进入支付页。', 'Session expired. Please re-enter from the platform entry.'),
     loadFailed: pickLocaleText(locale, '订单加载失败，请稍后重试。', 'Failed to load orders. Please try again later.'),
     networkError: pickLocaleText(locale, '网络错误，请稍后重试。', 'Network error. Please try again later.'),
     switchingMobileTab: pickLocaleText(locale, '正在切换到移动端订单 Tab...', 'Switching to mobile orders tab...'),
@@ -40,7 +40,7 @@ function OrdersContent() {
     backToPay: pickLocaleText(locale, '返回充值', 'Back to Top Up'),
     loading: pickLocaleText(locale, '加载中...', 'Loading...'),
     userPrefix: pickLocaleText(locale, '用户', 'User'),
-    authError: pickLocaleText(locale, '缺少认证信息，请从 Sub2API 平台正确访问订单页面', 'Missing authentication information. Please open the orders page from Sub2API.'),
+    authError: pickLocaleText(locale, '缺少认证信息，请从平台入口正确访问订单页面', 'Missing authentication information. Please open the orders page from the platform entry.'),
     refundRequestFailed: pickLocaleText(locale, '退款申请失败，请稍后重试。', 'Refund request failed. Please try again later.'),
   };
 

@@ -116,7 +116,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         400,
       );
     }
-    // 校验 Sub2API 分组仍然存在
+    // 校验 OPay 分组仍然存在
     const group = await getGroup(plan.groupId);
     if (!group || group.status !== 'active') {
       throw new OrderError(
@@ -423,7 +423,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     let paymentSubject: string;
     if (subscriptionPlan) {
       // R3: 订阅订单优先使用套餐自定义商品名称
-      paymentSubject = subscriptionPlan.productName || `Sub2API 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
+      paymentSubject = subscriptionPlan.productName || `OPay 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
     } else {
       // R5: 余额订单使用前缀/后缀配置
       const nameConfigs = await getSystemConfigs(['PRODUCT_NAME_PREFIX', 'PRODUCT_NAME_SUFFIX']);
@@ -432,7 +432,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       if (prefix || suffix) {
         paymentSubject = `${prefix || ''} ${payAmountStr} ${suffix || ''}`.trim();
       } else {
-        paymentSubject = `Sub2API ${payAmountStr} CNY`;
+        paymentSubject = `OPay ${payAmountStr} CNY`;
       }
     }
 
@@ -816,7 +816,7 @@ export async function executeFulfillment(orderId: string): Promise<void> {
 }
 
 /**
- * 订阅履约 — 支付成功后调用 Sub2API 分配订阅。
+ * 订阅履约 — 支付成功后调用 OPay 分配订阅。
  */
 export async function executeSubscriptionFulfillment(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -877,7 +877,7 @@ export async function executeSubscriptionFulfillment(orderId: string): Promise<v
       order.rechargeCode,
       Number(order.amount),
       order.userId,
-      `sub2apipay subscription order:${orderId}`,
+      `opay subscription order:${orderId}`,
       {
         type: 'subscription',
         groupId: order.subscriptionGroupId,
@@ -960,7 +960,7 @@ export async function executeRecharge(orderId: string): Promise<void> {
       order.rechargeCode,
       Number(order.amount),
       order.userId,
-      `sub2apipay recharge order:${orderId}`,
+      `opay recharge order:${orderId}`,
     );
 
     await prisma.order.updateMany({
@@ -1322,13 +1322,13 @@ function isDeductionPlan(v: DeductionPlan | RefundResult): v is DeductionPlan {
 async function executeDeduction(orderId: string, userId: number, plan: DeductionPlan): Promise<void> {
   const ts = Date.now();
   if (plan.type === 'subscription' && plan.subscriptionId && plan.subscriptionDays > 0) {
-    await extendSubscription(plan.subscriptionId, -plan.subscriptionDays, `sub2apipay:refund-sub:${orderId}:${ts}`);
+    await extendSubscription(plan.subscriptionId, -plan.subscriptionDays, `opay:refund-sub:${orderId}:${ts}`);
   } else if (plan.type === 'balance' && plan.balanceAmount > 0) {
     await subtractBalance(
       userId,
       plan.balanceAmount,
-      `sub2apipay refund order:${orderId}`,
-      `sub2apipay:refund:${orderId}:${ts}`,
+      `opay refund order:${orderId}`,
+      `opay:refund:${orderId}:${ts}`,
     );
   }
 }
@@ -1346,7 +1346,7 @@ async function rollbackDeduction(
       await extendSubscription(
         plan.subscriptionId,
         plan.subscriptionDays,
-        `sub2apipay:refund-sub-rollback:${orderId}:${ts}`,
+        `opay:refund-sub-rollback:${orderId}:${ts}`,
       );
       return true;
     } catch (rollbackError) {
@@ -1374,8 +1374,8 @@ async function rollbackDeduction(
       await addBalance(
         userId,
         plan.balanceAmount,
-        `sub2apipay refund rollback order:${orderId}`,
-        `sub2apipay:refund-rollback:${orderId}:${ts}`,
+        `opay refund rollback order:${orderId}`,
+        `opay:refund-rollback:${orderId}:${ts}`,
       );
       return true;
     } catch (rollbackError) {
@@ -1447,7 +1447,7 @@ export async function processRefund(input: RefundInput): Promise<RefundResult> {
   // 网关退款金额：部分退款时用 refundAmount，全额时用 payAmount
   const gatewayRefundAmount = input.amount ?? maxGatewayRefund;
   const refundReason =
-    input.reason?.trim() || order.refundRequestReason?.trim() || `sub2apipay refund order:${order.id}`;
+    input.reason?.trim() || order.refundRequestReason?.trim() || `opay refund order:${order.id}`;
 
   // 1. 准备扣减计划（可能提前返回 requireForce）
   const planOrResult = await prepareDeduction(order, deductBalance, input.force ?? false, locale, input.amount);

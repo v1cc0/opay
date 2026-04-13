@@ -260,7 +260,7 @@ mod tests {
 
     async fn test_repo() -> ChannelRepository {
         let path = std::env::temp_dir().join(format!(
-            "sub2apipay-channel-repo-{}.db",
+            "opay-channel-repo-{}.db",
             uuid::Uuid::new_v4()
         ));
         let db = DatabaseHandle::open_local(&path).await.unwrap();

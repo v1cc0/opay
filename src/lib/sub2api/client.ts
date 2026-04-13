@@ -84,7 +84,7 @@ export async function createAndRedeem(
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: await getHeaders(`sub2apipay:recharge:${code}`),
+        headers: await getHeaders(`opay:recharge:${code}`),
         body,
         signal: AbortSignal.timeout(RECHARGE_TIMEOUT_MS),
       });

@@ -336,7 +336,7 @@ async fn create_order(
         .map(|context| context.payment_subject.clone())
         .unwrap_or_else(|| {
             format!(
-                "Sub2API {:.2} CNY",
+                "OPay {:.2} CNY",
                 cents_to_amount(order.pay_amount_cents.unwrap_or(order.amount_cents))
             )
         });
@@ -784,7 +784,7 @@ async fn resolve_subscription_order(
         })?;
     let payment_subject = plan.product_name.clone().unwrap_or_else(|| {
         format!(
-            "Sub2API 订阅 {}",
+            "OPay 订阅 {}",
             if group.name.is_empty() {
                 plan.name.clone()
             } else {
@@ -994,7 +994,7 @@ mod tests {
         payment_providers: Vec<String>,
     ) -> AppState {
         let db_path = std::env::temp_dir().join(format!(
-            "sub2apipay-refund-request-route-{}.db",
+            "opay-refund-request-route-{}.db",
             Uuid::new_v4()
         ));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();

@@ -187,7 +187,7 @@ mod tests {
 
     async fn test_state() -> AppState {
         let path = std::env::temp_dir().join(format!(
-            "sub2apipay-easy-pay-notify-route-{}.db",
+            "opay-easy-pay-notify-route-{}.db",
             Uuid::new_v4()
         ));
         let db = DatabaseHandle::open_local(&path).await.unwrap();
