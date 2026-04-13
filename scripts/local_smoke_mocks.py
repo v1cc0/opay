@@ -70,6 +70,25 @@ class MockState:
             "default_mapped_model": "gpt-4.1-mini",
         }
 
+    def channel_group(self) -> dict[str, Any]:
+        return {
+            "id": self.channel_group_id,
+            "name": "OpenAI Balance Group",
+            "status": "active",
+            "subscription_type": "balance",
+            "description": "Local smoke top-up group",
+            "platform": "openai",
+            "rate_multiplier": 0.15,
+            "daily_limit_usd": 50,
+            "weekly_limit_usd": 200,
+            "monthly_limit_usd": 600,
+            "default_validity_days": None,
+            "sort_order": 2,
+            "supported_model_scopes": ["gpt-4.1-mini", "gpt-4o-mini"],
+            "allow_messages_dispatch": True,
+            "default_mapped_model": "gpt-4.1-mini",
+        }
+
     def platform_subscription(self) -> dict[str, Any]:
         return {
             "id": self.subscription_id,
@@ -142,8 +161,14 @@ class PlatformHandler(BaseHTTPRequestHandler):
         if path == f"/api/v1/admin/groups/{self.state.group_id}":
             return json_response(self, {"data": self.state.platform_group()})
 
+        if path == f"/api/v1/admin/groups/{self.state.channel_group_id}":
+            return json_response(self, {"data": self.state.channel_group()})
+
         if path == "/api/v1/admin/groups/all":
-            return json_response(self, {"data": [self.state.platform_group()]})
+            return json_response(
+                self,
+                {"data": [self.state.platform_group(), self.state.channel_group()]},
+            )
 
         if path == f"/api/v1/admin/users/{self.state.user_id}/subscriptions":
             return json_response(self, {"data": [self.state.platform_subscription()]})
