@@ -1,7 +1,7 @@
 use std::{ops::Deref, path::Path, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
-use turso::{Builder, Connection, Database, Row};
+use turso::{Builder, Connection, Database, Error as TursoError, Row};
 
 const MVCC_JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode = 'mvcc'";
 const CURRENT_JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode";
@@ -209,6 +209,11 @@ impl DatabaseHandle {
     }
 }
 
+pub fn is_retryable_concurrent_error(error: &TursoError) -> bool {
+    matches!(error, TursoError::Busy(_) | TursoError::BusySnapshot(_))
+        || matches!(error, TursoError::Error(message) if message.contains("conflict"))
+}
+
 struct Migration {
     name: &'static str,
     sql: &'static str,
@@ -269,6 +274,54 @@ mod tests {
         let conn = db.connect().unwrap();
         let mut rows = conn
             .query("SELECT COUNT(*) FROM items WHERE name = ?1", ["hello"])
+            .await
+            .unwrap();
+        let row = rows.next().await.unwrap().unwrap();
+        assert_eq!(parse_i64_from_row(&row, 0).unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn concurrent_commit_conflict_on_same_row_is_retryable() {
+        let path = std::env::temp_dir().join(format!("opay-db-conflict-{}.db", Uuid::new_v4()));
+        let db = DatabaseHandle::open_local(&path).await.unwrap();
+        let conn = db.connect().unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS counters (id INTEGER PRIMARY KEY, val INTEGER NOT NULL)",
+            (),
+        )
+        .await
+        .unwrap();
+        conn.execute("INSERT INTO counters (id, val) VALUES (1, 0)", ())
+            .await
+            .unwrap();
+
+        let tx1 = db.begin_concurrent().await.unwrap();
+        let tx2 = db.begin_concurrent().await.unwrap();
+        tx1.execute("UPDATE counters SET val = val + 1 WHERE id = 1", ())
+            .await
+            .unwrap();
+        let tx2_update = tx2
+            .execute("UPDATE counters SET val = val + 1 WHERE id = 1", ())
+            .await;
+
+        tx1.commit().await.unwrap();
+        match tx2_update {
+            Ok(_) => {
+                let err = tx2.commit().await.unwrap_err();
+                let turso_err = err
+                    .downcast_ref::<TursoError>()
+                    .expect("expected turso error for concurrent conflict");
+                assert!(is_retryable_concurrent_error(turso_err));
+            }
+            Err(err) => {
+                assert!(is_retryable_concurrent_error(&err));
+                let _ = tx2.rollback().await;
+            }
+        }
+
+        let conn = db.connect().unwrap();
+        let mut rows = conn
+            .query("SELECT val FROM counters WHERE id = 1", ())
             .await
             .unwrap();
         let row = rows.next().await.unwrap().unwrap();

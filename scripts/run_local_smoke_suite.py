@@ -203,6 +203,13 @@ def main() -> int:
         summary["adminOrderActions"] = json.loads(admin_output)
         summary["steps"].append("admin_order_actions")
 
+        concurrent_output = run_capture(
+            ["cargo", "run", "--quiet", "--example", "concurrent_write_smoke"],
+            repo_root,
+        )
+        summary["concurrentWriteSmoke"] = json.loads(concurrent_output)
+        summary["steps"].append("concurrent_write_smoke")
+
         write_json(output_path, summary)
         print(json.dumps(summary, indent=2))
         return 0
