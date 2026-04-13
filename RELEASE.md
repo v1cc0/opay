@@ -93,4 +93,4 @@ gh release create vX.Y.Z --title "vX.Y.Z" --generate-notes
 
 ## 6. 当前最近版本
 
-- `v0.1.1`
+- `v0.1.2`

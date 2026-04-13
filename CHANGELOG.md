@@ -10,6 +10,30 @@
 
 ---
 
+## [v0.1.2] - 2026-04-14
+
+### Added
+
+- 增加可选浏览器 smoke，并接入统一 runner
+- 增加 `OPERATIONS.md` 运维文档
+- 增加 `RELEASE.md` 发版文档
+- 增加 `CHANGELOG.md` 版本变更记录
+
+### Changed
+
+- 根 README 重写为功能说明 + 上手指南导向
+- 前端 README 重写为职责边界 + 联调指南导向
+- 本地数据库运行时明确区分 readonly 读路径与 concurrent 写路径
+
+### Operational
+
+- 手动触发的 GitHub smoke workflow 可继续用于发版前验证
+- 当前发布版本提升到：
+  - backend: `0.1.2`
+  - frontend: `0.1.2`
+
+---
+
 ## [v0.1.1] - 2026-04-14
 
 ### Added
