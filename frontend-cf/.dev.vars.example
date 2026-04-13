@@ -1,0 +1,3 @@
+API_BASE_URL=http://127.0.0.1:8080
+# SUB2API_BASE_URL=https://sub2api.example.com
+# IFRAME_ALLOW_ORIGINS=https://sub2api.example.com

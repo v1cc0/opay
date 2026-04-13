@@ -1,0 +1,13 @@
+{
+  "id": "evt_test_succeeded",
+  "type": "payment_intent.succeeded",
+  "data": {
+    "object": {
+      "id": "pi_test_succeeded",
+      "amount": 1099,
+      "metadata": {
+        "orderId": "order_test_succeeded"
+      }
+    }
+  }
+}

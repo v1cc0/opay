@@ -1,0 +1,15 @@
+node_modules
+frontend-cf/node_modules
+frontend-cf/dist
+frontend-cf/.wrangler
+backend-rs/target
+backend-rs/data
+backend-rs/config.toml
+.DS_Store
+.env*
+PROGRESS.md
+PROGRESS.md.lastround
+INCIDENTS.md
+AGENTS.md
+GEMINI.md
+CLAUDE.md

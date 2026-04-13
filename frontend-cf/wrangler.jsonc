@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "sub2apipay-frontend-cf",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-04-13",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "API_BASE_URL": "http://127.0.0.1:8080"
+  }
+}

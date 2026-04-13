@@ -1,0 +1,42 @@
+[app]
+host = "0.0.0.0"
+port = 8080
+db_path = "data/sub2apipay.db"
+payment_providers = ["easypay", "stripe"]
+admin_token = "replace-with-a-long-random-token"
+system_config_cache_ttl_secs = 30
+sub2api_base_url = "https://sub2api.example.com"
+sub2api_timeout_secs = 10
+min_recharge_amount = 1
+max_recharge_amount = 1000
+max_daily_recharge_amount = 10000
+pay_help_image_url = ""
+pay_help_text = ""
+stripe_publishable_key = ""
+
+[runtime]
+rust_log = "info,tower_http=info"
+
+[env]
+ORDER_TIMEOUT_MINUTES = 5
+IFRAME_ALLOW_ORIGINS = ""
+
+# EasyPay
+EASY_PAY_PID = ""
+EASY_PAY_PKEY = ""
+EASY_PAY_API_BASE = ""
+EASY_PAY_NOTIFY_URL = ""
+EASY_PAY_RETURN_URL = ""
+EASY_PAY_CID_ALIPAY = ""
+EASY_PAY_CID_WXPAY = ""
+
+# Stripe
+STRIPE_SECRET_KEY = ""
+STRIPE_WEBHOOK_SECRET = ""
+
+# Optional fee overrides
+# FEE_RATE_ALIPAY = 0.0
+# FEE_RATE_WXPAY = 0.0
+# FEE_RATE_STRIPE = 0.0
+# FEE_RATE_PROVIDER_EASYPAY = 0.0
+# FEE_RATE_PROVIDER_STRIPE = 0.0

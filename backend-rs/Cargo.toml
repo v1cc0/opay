@@ -1,0 +1,27 @@
+[package]
+name = "sub2apipay-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+aes-gcm = "0.11.0-rc.3"
+async-trait = "0.1.89"
+axum = { version = "0.8.8", features = ["macros"] }
+base64 = "0.22.1"
+chrono = "0.4.44"
+hmac = "0.13.0"
+md5 = "0.8.0"
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls", "form"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde_urlencoded = "0.7.1"
+sha2 = "0.11.0"
+tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread", "signal", "fs", "sync"] }
+toml = "1.1.2"
+tower-http = { version = "0.6.8", features = ["trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+thiserror = "2.0.18"
+turso = "0.6.0-pre.17"
+uuid = { version = "1.23.0", features = ["v4"] }
