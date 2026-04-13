@@ -18,7 +18,7 @@ interface PaymentQRCodeProps {
   paymentType?: string;
   amount: number;
   payAmount?: number;
-  expiresAt: string;
+  expiresAt: string | number;
   statusAccessToken?: string;
   onStatusChange: (status: PublicOrderStatusSnapshot) => void;
   onBack: () => void;
@@ -30,6 +30,21 @@ interface PaymentQRCodeProps {
 
 function isVisibleOrderOutcome(data: PublicOrderStatusSnapshot): boolean {
   return data.paymentSuccess || TERMINAL_STATUSES.has(data.status);
+}
+
+function normalizeExpiryTimestamp(value: string | number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? value : value * 1000;
+  }
+
+  const text = String(value).trim();
+  if (!text) return Number.NaN;
+  if (/^\d+$/.test(text)) {
+    const numeric = Number(text);
+    return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  }
+
+  return new Date(text).getTime();
 }
 
 export default function PaymentQRCode({
@@ -305,10 +320,10 @@ export default function PaymentQRCode({
   useEffect(() => {
     const updateTimer = () => {
       const now = Date.now();
-      const expiry = new Date(expiresAt).getTime();
+      const expiry = normalizeExpiryTimestamp(expiresAt);
       const diff = expiry - now;
 
-      if (diff <= 0) {
+      if (!Number.isFinite(expiry) || diff <= 0) {
         setTimeLeft(t.expired);
         setTimeLeftSeconds(0);
         setExpired(true);
@@ -329,7 +344,7 @@ export default function PaymentQRCode({
 
   const pollStatus = useCallback(async () => {
     try {
-      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken));
+      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken, token));
       if (res.ok) {
         const data = (await res.json()) as PublicOrderStatusSnapshot;
         if (isVisibleOrderOutcome(data)) {
@@ -337,7 +352,7 @@ export default function PaymentQRCode({
         }
       }
     } catch {}
-  }, [orderId, onStatusChange, statusAccessToken]);
+  }, [orderId, onStatusChange, statusAccessToken, token]);
 
   useEffect(() => {
     if (expired) return;
@@ -349,7 +364,7 @@ export default function PaymentQRCode({
   const handleCancel = async () => {
     if (!token) return;
     try {
-      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken));
+      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken, token));
       if (!res.ok) return;
       const data = (await res.json()) as PublicOrderStatusSnapshot;
 

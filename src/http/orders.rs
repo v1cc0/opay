@@ -34,6 +34,7 @@ use crate::{
 
 const VALID_MY_ORDER_PAGE_SIZES: &[i64] = &[20, 50, 100];
 const ORDER_STATUS_ACCESS_PURPOSE: &str = "order-status-access:v2";
+const ORDER_STATUS_ACCESS_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -101,6 +102,8 @@ struct CreateOrderResponse {
     pay_url: Option<String>,
     qr_code: Option<String>,
     client_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status_access_token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -186,6 +189,7 @@ struct SubscriptionOrderContext {
 
 async fn create_order(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<CreateOrderQuery>,
     Json(body): Json<CreateOrderRequest>,
 ) -> AppResult<Json<CreateOrderResponse>> {
@@ -217,10 +221,9 @@ async fn create_order(
         )));
     }
 
-    let platform = state
-        .platform
-        .as_ref()
-        .ok_or_else(|| AppError::internal(anyhow::anyhow!("PLATFORM_BASE_URL is not configured")))?;
+    let platform = state.platform.as_ref().ok_or_else(|| {
+        AppError::internal(anyhow::anyhow!("PLATFORM_BASE_URL is not configured"))
+    })?;
     let token_user = platform
         .get_current_user_by_token(token)
         .await
@@ -340,6 +343,21 @@ async fn create_order(
                 cents_to_amount(order.pay_amount_cents.unwrap_or(order.amount_cents))
             )
         });
+    let status_access_token = create_order_status_access_token(
+        state.config.admin_token.as_deref(),
+        &order.id,
+        order.user_id,
+    );
+    let request_base_url = infer_public_base_url(&headers);
+    let easy_pay_notify_url = build_easy_pay_notify_url(
+        request_base_url.as_deref(),
+        order.provider_instance_id.as_deref(),
+    );
+    let order_result_url = build_order_result_url(
+        request_base_url.as_deref(),
+        &order.id,
+        status_access_token.as_deref(),
+    );
     let payment_result = match payment_provider::create_payment_for_order(
         &state,
         &CreatePaymentRequest {
@@ -349,6 +367,8 @@ async fn create_order(
             subject,
             client_ip: None,
             is_mobile: body.is_mobile.unwrap_or(false),
+            notify_url: easy_pay_notify_url,
+            return_url: order_result_url,
             provider_instance_id: order.provider_instance_id.clone(),
         },
     )
@@ -386,6 +406,7 @@ async fn create_order(
         pay_url: payment_result.pay_url,
         qr_code: payment_result.qr_code,
         client_secret: payment_result.client_secret,
+        status_access_token,
     }))
 }
 
@@ -542,19 +563,60 @@ async fn get_order_status(
     .await
     .is_ok();
 
-    if !access_ok && !admin_ok {
-        return Err(AppError::unauthorized(message(
-            locale,
-            "未授权访问该订单状态",
-            "Unauthorized to access this order status",
-        )));
-    }
-
     let order = OrderRepository::new(state.db.clone())
         .get_by_id(&id)
         .await
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found(message(locale, "订单不存在", "Order not found")))?;
+
+    if !access_ok && !admin_ok {
+        let platform = state.platform.as_ref().ok_or_else(|| {
+            AppError::unauthorized(message(
+                locale,
+                "未授权访问该订单状态",
+                "Unauthorized to access this order status",
+            ))
+        })?;
+        let token = query
+            .token
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                AppError::unauthorized(message(
+                    locale,
+                    "未授权访问该订单状态",
+                    "Unauthorized to access this order status",
+                ))
+            })?;
+        let token_user = platform
+            .get_current_user_by_token(token)
+            .await
+            .map_err(|error| {
+                let error_message = error.to_string();
+                if error_message.starts_with("Failed to get current user:") {
+                    AppError::unauthorized(message(
+                        locale,
+                        "未授权访问该订单状态",
+                        "Unauthorized to access this order status",
+                    ))
+                } else {
+                    AppError::public_internal(message(
+                        locale,
+                        "获取订单状态失败",
+                        "Failed to load order status",
+                    ))
+                }
+            })?;
+        if token_user.id != order.user_id {
+            return Err(AppError::forbidden(message(
+                locale,
+                "无权访问该订单状态",
+                "Forbidden to access this order status",
+            )));
+        }
+    }
+
     let derived = derive_order_state(&order);
 
     Ok(Json(OrderStatusResponse {
@@ -949,14 +1011,116 @@ fn total_pages(total: i64, page_size: i64) -> i64 {
     }
 }
 
+fn create_order_status_access_token(
+    admin_token: Option<&str>,
+    order_id: &str,
+    user_id: i64,
+) -> Option<String> {
+    let admin_token = admin_token?;
+    let expires_at_ms = now_timestamp_ms() + ORDER_STATUS_ACCESS_TTL_MS;
+    let signature = build_order_status_signature(admin_token, order_id, user_id, expires_at_ms)?;
+    Some(format!("{expires_at_ms}.{user_id}.{signature}"))
+}
+
+fn build_order_result_url(
+    request_base_url: Option<&str>,
+    order_id: &str,
+    access_token: Option<&str>,
+) -> Option<String> {
+    let base = request_base_url?;
+    let access_token = access_token?;
+    Some(format!(
+        "{}/pay/result?order_id={}&access_token={}",
+        base.trim_end_matches('/'),
+        url_encode_component(order_id),
+        url_encode_component(access_token)
+    ))
+}
+
+fn build_easy_pay_notify_url(
+    request_base_url: Option<&str>,
+    provider_instance_id: Option<&str>,
+) -> Option<String> {
+    let base = request_base_url?;
+    let mut url = format!("{}/api/easy-pay/notify", base.trim_end_matches('/'));
+    if let Some(provider_instance_id) = provider_instance_id.filter(|value| !value.is_empty()) {
+        url.push_str("?inst=");
+        url.push_str(&url_encode_component(provider_instance_id));
+    }
+    Some(url)
+}
+
+fn infer_public_base_url(headers: &HeaderMap) -> Option<String> {
+    let forwarded_proto = header_value(headers, "x-forwarded-proto")
+        .and_then(first_forwarded_value)
+        .map(str::to_string);
+    let forwarded_host = header_value(headers, "x-forwarded-host")
+        .and_then(first_forwarded_value)
+        .map(str::to_string);
+    let host = forwarded_host
+        .or_else(|| header_value(headers, "host").map(str::to_string))
+        .or_else(|| {
+            header_value(headers, "origin").and_then(|origin| {
+                let (_, remainder) = origin.split_once("://")?;
+                Some(
+                    remainder
+                        .split('/')
+                        .next()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string(),
+                )
+            })
+        })?;
+    if host.is_empty() {
+        return None;
+    }
+
+    let scheme = forwarded_proto
+        .or_else(|| {
+            header_value(headers, "origin").and_then(|origin| {
+                origin
+                    .split_once("://")
+                    .map(|(scheme, _)| scheme.trim().to_string())
+            })
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "http".to_string());
+
+    Some(format!("{scheme}://{host}"))
+}
+
+fn header_value<'a>(headers: &'a HeaderMap, key: &'static str) -> Option<&'a str> {
+    headers.get(key)?.to_str().ok().map(str::trim)
+}
+
+fn first_forwarded_value(value: &str) -> Option<&str> {
+    value
+        .split(',')
+        .next()
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+}
+
+fn url_encode_component(value: &str) -> String {
+    serde_urlencoded::to_string([("v", value)])
+        .ok()
+        .and_then(|encoded| encoded.strip_prefix("v=").map(str::to_string))
+        .unwrap_or_else(|| value.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        collections::HashMap,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use axum::{
-        Json, Router,
+        Form, Json, Router,
         extract::{Path, State},
-        routing::get,
+        routing::{get, post},
     };
     use serde_json::json;
     use tokio::{net::TcpListener, task::JoinHandle};
@@ -973,8 +1137,8 @@ mod tests {
             repository::{NewPendingOrder, OrderRepository},
             service::OrderService,
         },
-        provider_instances::{ProviderInstanceRepository, ProviderInstanceWrite},
         platform::PlatformClient,
+        provider_instances::{ProviderInstanceRepository, ProviderInstanceWrite},
         subscription_plan::SubscriptionPlanRepository,
         system_config::{SystemConfigService, UpsertSystemConfig},
     };
@@ -985,6 +1149,11 @@ mod tests {
         balance: f64,
     }
 
+    #[derive(Clone, Default)]
+    struct CapturedForms {
+        forms: Arc<Mutex<Vec<HashMap<String, String>>>>,
+    }
+
     async fn test_state(platform_base_url: Option<String>) -> AppState {
         test_state_with_payment_providers(platform_base_url, Vec::new()).await
     }
@@ -993,10 +1162,8 @@ mod tests {
         platform_base_url: Option<String>,
         payment_providers: Vec<String>,
     ) -> AppState {
-        let db_path = std::env::temp_dir().join(format!(
-            "opay-refund-request-route-{}.db",
-            Uuid::new_v4()
-        ));
+        let db_path =
+            std::env::temp_dir().join(format!("opay-refund-request-route-{}.db", Uuid::new_v4()));
         let db = DatabaseHandle::open_local(&db_path).await.unwrap();
         db.run_migrations().await.unwrap();
 
@@ -1079,6 +1246,67 @@ mod tests {
         (format!("http://{}", addr), handle)
     }
 
+    async fn start_mock_stripe() -> (String, CapturedForms, JoinHandle<()>) {
+        async fn create_payment_intent(
+            State(captured): State<CapturedForms>,
+            Form(form): Form<HashMap<String, String>>,
+        ) -> Json<serde_json::Value> {
+            captured.forms.lock().unwrap().push(form.clone());
+            Json(json!({
+                "id": "pi_local_mock_123",
+                "client_secret": "pi_local_mock_123_secret_456",
+            }))
+        }
+
+        let state = CapturedForms::default();
+        let app = Router::new()
+            .route("/v1/payment_intents", post(create_payment_intent))
+            .with_state(state.clone());
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        (format!("http://{}", addr), state, handle)
+    }
+
+    async fn start_mock_easypay() -> (String, CapturedForms, JoinHandle<()>) {
+        async fn create_payment(
+            State(captured): State<CapturedForms>,
+            Form(form): Form<HashMap<String, String>>,
+        ) -> Json<serde_json::Value> {
+            captured.forms.lock().unwrap().push(form.clone());
+            Json(json!({
+                "code": 1,
+                "trade_no": "easy_local_trade_123",
+                "payurl": "https://pay.local/mock",
+                "qrcode": "weixin://mock-qr",
+            }))
+        }
+
+        let state = CapturedForms::default();
+        let app = Router::new()
+            .route("/mapi.php", post(create_payment))
+            .with_state(state.clone());
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        (format!("http://{}", addr), state, handle)
+    }
+
+    fn forwarded_headers(host: &str, proto: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("host", host.parse().unwrap());
+        headers.insert("x-forwarded-proto", proto.parse().unwrap());
+        headers
+    }
+
     #[tokio::test]
     async fn create_order_rejects_direct_payment_type_in_rust_mvp() {
         let (base_url, handle) = start_mock_platform(MockUser {
@@ -1099,6 +1327,7 @@ mod tests {
 
         let error = create_order(
             State(state),
+            HeaderMap::new(),
             Query(CreateOrderQuery { lang: None }),
             Json(CreateOrderRequest {
                 token: "user-token".to_string(),
@@ -1118,6 +1347,185 @@ mod tests {
         assert!(error.to_string().contains("alipay_direct"));
 
         handle.abort();
+    }
+
+    #[tokio::test]
+    async fn create_order_returns_status_access_token_for_stripe_flow() {
+        let (platform_base_url, platform_handle) = start_mock_platform(MockUser {
+            id: 8,
+            balance: 88.0,
+        })
+        .await;
+        let (stripe_base_url, stripe_mock, stripe_handle) = start_mock_stripe().await;
+        let state =
+            test_state_with_payment_providers(Some(platform_base_url), vec!["stripe".to_string()])
+                .await;
+        let providers = ProviderInstanceRepository::new(state.db.clone());
+
+        let instance = providers
+            .create(ProviderInstanceWrite {
+                provider_key: "stripe".to_string(),
+                name: "Stripe Local".to_string(),
+                config: crypto::encrypt(
+                    state.config.admin_token.as_deref(),
+                    &json!({
+                        "secretKey": "sk_test_local",
+                        "publishableKey": "pk_test_local",
+                        "apiBase": stripe_base_url,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+                supported_types: "stripe".to_string(),
+                enabled: true,
+                sort_order: 0,
+                limits: None,
+                refund_enabled: true,
+            })
+            .await
+            .unwrap();
+
+        let response = create_order(
+            State(state.clone()),
+            forwarded_headers("opay.local.test", "https"),
+            Query(CreateOrderQuery { lang: None }),
+            Json(CreateOrderRequest {
+                token: "user-token".to_string(),
+                amount: 12.34,
+                payment_type: "stripe".to_string(),
+                src_host: None,
+                src_url: None,
+                is_mobile: Some(false),
+                order_type: None,
+                plan_id: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.payment_type, "stripe");
+        assert_eq!(
+            response.client_secret.as_deref(),
+            Some("pi_local_mock_123_secret_456")
+        );
+        assert!(response.status_access_token.is_some());
+
+        let saved = OrderRepository::new(state.db.clone())
+            .get_by_id(&response.order_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            saved.provider_instance_id.as_deref(),
+            Some(instance.id.as_str())
+        );
+
+        let stripe_calls = stripe_mock.forms.lock().unwrap().clone();
+        assert_eq!(stripe_calls.len(), 1);
+        assert_eq!(
+            stripe_calls[0].get("metadata[orderId]").map(String::as_str),
+            Some(response.order_id.as_str())
+        );
+
+        let order_status = get_order_status(
+            State(state),
+            HeaderMap::new(),
+            Path(response.order_id),
+            Query(OrderStatusQuery {
+                token: None,
+                lang: None,
+                access_token: response.status_access_token,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(order_status.status, "PENDING");
+        assert_eq!(order_status.recharge_status, "not_paid");
+
+        stripe_handle.abort();
+        platform_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn create_order_builds_dynamic_easy_pay_urls() {
+        let (platform_base_url, platform_handle) = start_mock_platform(MockUser {
+            id: 16,
+            balance: 168.0,
+        })
+        .await;
+        let (easy_pay_base_url, easy_pay_mock, easy_pay_handle) = start_mock_easypay().await;
+        let state =
+            test_state_with_payment_providers(Some(platform_base_url), vec!["easypay".to_string()])
+                .await;
+        let providers = ProviderInstanceRepository::new(state.db.clone());
+
+        let instance = providers
+            .create(ProviderInstanceWrite {
+                provider_key: "easypay".to_string(),
+                name: "EasyPay Local".to_string(),
+                config: crypto::encrypt(
+                    state.config.admin_token.as_deref(),
+                    &json!({
+                        "pid": "easy_pid_local",
+                        "pkey": "easy_key_local",
+                        "apiBase": easy_pay_base_url,
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+                supported_types: "alipay".to_string(),
+                enabled: true,
+                sort_order: 0,
+                limits: None,
+                refund_enabled: true,
+            })
+            .await
+            .unwrap();
+
+        let response = create_order(
+            State(state),
+            forwarded_headers("pay.opay.local", "https"),
+            Query(CreateOrderQuery { lang: None }),
+            Json(CreateOrderRequest {
+                token: "user-token".to_string(),
+                amount: 23.45,
+                payment_type: "alipay".to_string(),
+                src_host: None,
+                src_url: None,
+                is_mobile: Some(false),
+                order_type: None,
+                plan_id: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(response.payment_type, "alipay");
+        assert_eq!(response.pay_url.as_deref(), Some("https://pay.local/mock"));
+        assert!(response.status_access_token.is_some());
+
+        let easy_pay_calls = easy_pay_mock.forms.lock().unwrap().clone();
+        assert_eq!(easy_pay_calls.len(), 1);
+        let form = &easy_pay_calls[0];
+        let expected_notify_url = format!(
+            "https://pay.opay.local/api/easy-pay/notify?inst={}",
+            instance.id
+        );
+        assert_eq!(
+            form.get("notify_url").map(String::as_str),
+            Some(expected_notify_url.as_str())
+        );
+        let return_url = form.get("return_url").cloned().unwrap_or_default();
+        assert!(return_url.starts_with("https://pay.opay.local/pay/result?order_id="));
+        assert!(return_url.contains("access_token="));
+        assert!(return_url.contains(&response.order_id));
+
+        easy_pay_handle.abort();
+        platform_handle.abort();
     }
 
     #[tokio::test]

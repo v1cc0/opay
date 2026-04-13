@@ -21,6 +21,8 @@ pub struct CreatePaymentRequest {
     pub subject: String,
     pub client_ip: Option<String>,
     pub is_mobile: bool,
+    pub notify_url: Option<String>,
+    pub return_url: Option<String>,
     pub provider_instance_id: Option<String>,
 }
 
@@ -436,11 +438,15 @@ impl PaymentProvider for EasyPayProvider {
         let api_base = self
             .api_base()
             .ok_or_else(|| anyhow!("EASY_PAY_API_BASE is required for EasyPay"))?;
-        let notify_url = self
-            .notify_url()
+        let notify_url = request
+            .notify_url
+            .clone()
+            .or_else(|| self.notify_url())
             .ok_or_else(|| anyhow!("EASY_PAY_NOTIFY_URL is required for EasyPay"))?;
-        let return_url = self
-            .return_url()
+        let return_url = request
+            .return_url
+            .clone()
+            .or_else(|| self.return_url())
             .ok_or_else(|| anyhow!("EASY_PAY_RETURN_URL is required for EasyPay"))?;
 
         let amount = cents_to_amount(request.amount_cents);

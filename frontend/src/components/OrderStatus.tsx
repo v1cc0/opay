@@ -8,6 +8,7 @@ import { buildOrderStatusUrl } from '@/lib/order/status-url';
 interface OrderStatusProps {
   orderId: string;
   order: PublicOrderStatusSnapshot;
+  token?: string;
   statusAccessToken?: string;
   onBack: () => void;
   onStateChange?: (order: PublicOrderStatusSnapshot) => void;
@@ -146,6 +147,7 @@ function getStatusConfig(order: PublicOrderStatusSnapshot, locale: Locale, isDar
 export default function OrderStatus({
   orderId,
   order,
+  token,
   statusAccessToken,
   onBack,
   onStateChange,
@@ -171,7 +173,7 @@ export default function OrderStatus({
 
     const refreshOrder = async () => {
       try {
-        const response = await fetch(buildOrderStatusUrl(orderId, statusAccessToken));
+        const response = await fetch(buildOrderStatusUrl(orderId, statusAccessToken, token));
         if (!response.ok) return;
         const nextOrder = (await response.json()) as PublicOrderStatusSnapshot;
         if (cancelled) return;
@@ -189,7 +191,7 @@ export default function OrderStatus({
       clearInterval(timer);
       clearTimeout(timeout);
     };
-  }, [orderId, currentOrder.paymentSuccess, currentOrder.rechargeSuccess, statusAccessToken]);
+  }, [orderId, currentOrder.paymentSuccess, currentOrder.rechargeSuccess, statusAccessToken, token]);
 
   const config = getStatusConfig(currentOrder, locale, dark);
   const doneLabel = locale === 'en' ? 'Done' : '完成';

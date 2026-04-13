@@ -30,8 +30,8 @@ interface OrderResult {
   payUrl?: string | null;
   qrCode?: string | null;
   clientSecret?: string | null;
-  expiresAt: string;
-  statusAccessToken: string;
+  expiresAt: string | number;
+  statusAccessToken?: string;
 }
 
 interface AppConfig {
@@ -1112,6 +1112,7 @@ function PayContent() {
         <OrderStatus
           orderId={orderResult.orderId}
           order={finalOrderState}
+          token={token || undefined}
           statusAccessToken={orderResult.statusAccessToken}
           onStateChange={setFinalOrderState}
           onBack={handleBack}
