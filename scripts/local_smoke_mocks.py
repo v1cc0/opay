@@ -40,6 +40,8 @@ class MockState:
     subscription_expires_at: str = field(default_factory=lambda: iso_now(30))
     fail_next_balance_redeem: int = 0
     fail_next_subscription_redeem: int = 0
+    fail_next_stripe_refund: int = 0
+    fail_next_easypay_refund: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def platform_user(self) -> dict[str, Any]:
@@ -216,6 +218,10 @@ class PlatformHandler(BaseHTTPRequestHandler):
                     self.state.fail_next_balance_redeem = int(body["fail_next_balance_redeem"] or 0)
                 if "fail_next_subscription_redeem" in body:
                     self.state.fail_next_subscription_redeem = int(body["fail_next_subscription_redeem"] or 0)
+                if "fail_next_stripe_refund" in body:
+                    self.state.fail_next_stripe_refund = int(body["fail_next_stripe_refund"] or 0)
+                if "fail_next_easypay_refund" in body:
+                    self.state.fail_next_easypay_refund = int(body["fail_next_easypay_refund"] or 0)
             return json_response(
                 self,
                 {
@@ -223,6 +229,8 @@ class PlatformHandler(BaseHTTPRequestHandler):
                     "state": {
                         "fail_next_balance_redeem": self.state.fail_next_balance_redeem,
                         "fail_next_subscription_redeem": self.state.fail_next_subscription_redeem,
+                        "fail_next_stripe_refund": self.state.fail_next_stripe_refund,
+                        "fail_next_easypay_refund": self.state.fail_next_easypay_refund,
                     },
                 },
             )
@@ -287,6 +295,10 @@ class PlatformHandler(BaseHTTPRequestHandler):
 class PaymentProviderHandler(BaseHTTPRequestHandler):
     server_version = "OPayPaymentProviderMock/0.1"
 
+    @property
+    def state(self) -> MockState:
+        return self.server.state  # type: ignore[attr-defined]
+
     def log_message(self, format: str, *args: Any) -> None:
         print(f"[payments] {self.address_string()} - {format % args}")
 
@@ -310,6 +322,14 @@ class PaymentProviderHandler(BaseHTTPRequestHandler):
             )
 
         if path == "/v1/refunds":
+            with self.state.lock:
+                if self.state.fail_next_stripe_refund > 0:
+                    self.state.fail_next_stripe_refund -= 1
+                    return json_response(
+                        self,
+                        {"error": "mock stripe refund failure", "captured_form": form},
+                        status=500,
+                    )
             refund_id = f"re_local_{uuid.uuid4().hex[:12]}"
             return json_response(
                 self,
@@ -337,6 +357,14 @@ class PaymentProviderHandler(BaseHTTPRequestHandler):
             )
 
         if path == "/api.php" and parsed.query == "act=refund":
+            with self.state.lock:
+                if self.state.fail_next_easypay_refund > 0:
+                    self.state.fail_next_easypay_refund -= 1
+                    return json_response(
+                        self,
+                        {"code": 0, "msg": "mock easypay refund failure", "captured_form": form},
+                        status=500,
+                    )
             return json_response(
                 self,
                 {
@@ -374,7 +402,7 @@ def main() -> int:
 
     state = MockState()
     platform_server = start_server("platform", args.host, args.platform_port, PlatformHandler, state)
-    payment_server = start_server("payments", args.host, args.payment_port, PaymentProviderHandler)
+    payment_server = start_server("payments", args.host, args.payment_port, PaymentProviderHandler, state)
 
     print("[local-smoke-mocks] ready")
     try:
