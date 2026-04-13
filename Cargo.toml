@@ -1,7 +1,9 @@
 [package]
-name = "opay-rs"
+name = "opay"
 version = "0.1.0"
 edition = "2024"
+authors = ["v1cc0 <vc@v1cc0.eu.org>"]
+description = "Payment gateway for OPC"
 
 [dependencies]
 anyhow = "1.0.102"
@@ -12,12 +14,22 @@ base64 = "0.22.1"
 chrono = "0.4.44"
 hmac = "0.13.0"
 md5 = "0.8.0"
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls", "form"] }
+reqwest = { version = "0.13.2", default-features = false, features = [
+  "json",
+  "rustls",
+  "form",
+] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 serde_urlencoded = "0.7.1"
 sha2 = "0.11.0"
-tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread", "signal", "fs", "sync"] }
+tokio = { version = "1.51.1", features = [
+  "macros",
+  "rt-multi-thread",
+  "signal",
+  "fs",
+  "sync",
+] }
 toml = "1.1.2"
 tower-http = { version = "0.6.8", features = ["trace"] }
 tracing = "0.1.44"
